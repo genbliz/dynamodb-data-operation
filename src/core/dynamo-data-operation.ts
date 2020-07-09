@@ -1,101 +1,270 @@
-import { GenericDataError } from "./../helpers/errors";
-import { UtilService } from "../helpers/util-service";
-import { DynamoDB } from "aws-sdk";
-import { DocumentClient } from "aws-sdk/clients/dynamodb";
-import { Marshaller } from "@aws/dynamodb-auto-marshaller";
-import Joi from "@hapi/joi";
-//
-import { getJoiValidationErrors } from "./base-joi-helper";
-import type {
+import {
   IDynamoQueryParamOptions,
   IDynamoQuerySecondaryParamOptions,
-} from "../types/base-declarations";
-import { MyDynamoConnection } from "../test/connection";
-import DynamoHelperMixins from "./base-mixins";
-import { ISecondaryIndexDef } from "../types/base-types";
+} from "./../types/base-declarations";
+import { GenericDataError } from "./../helpers/errors";
+import { UtilService } from "../helpers/util-service";
 import { LoggingService } from "../helpers/logging-service";
-
-interface IBasicProps {
-  id: string;
-}
-
-interface ITableConfig<T> {
-  tableName: string;
-  primaryHashKey: string;
-  primaryRangeSortKey?: string;
-  secondaryIndexOptions?: ISecondaryIndexDef<T>[];
-  avoidDefaultTablePrefix?: boolean;
-}
+import { DynamoDB } from "aws-sdk";
+import { DocumentClient } from "aws-sdk/clients/dynamodb";
+import Joi from "@hapi/joi";
+import { Marshaller } from "@aws/dynamodb-auto-marshaller";
+import { ISecondaryIndexDef } from "../types/base-types";
+import { getJoiValidationErrors } from "src/core/base-joi-helper";
+import BaseMixins from "../core/base-mixins";
 
 interface IDynamoOptions<T> {
-  tableConfig: ITableConfig<T>;
-  schemaDef: Joi.SchemaMap;
-  canCreateTable: boolean;
-  schemaGroup: "TENANT" | "CORE";
+  dynamoDb: () => DynamoDB;
+  schema: Joi.Schema;
+  dynamoDbClient: () => DocumentClient;
+  segmentPartitionValue: string;
+  secondaryIndexOptions: ISecondaryIndexDef<T>[];
+  tableFullName: string;
+}
+
+function generateDynamoTableKey() {
+  return Date.now().toString();
 }
 
 const getRandom = () =>
   [
+    "rand",
     Math.round(Math.random() * 99999),
     Math.round(Math.random() * 88888),
     Math.round(Math.random() * 99),
   ].join("");
 
-export abstract class AppDynamoDataOperation<T> extends DynamoHelperMixins {
-  readonly #tableNamePrefix: string;
+export abstract class DataOperation<T> extends BaseMixins {
+  readonly #partitionKeyFieldName = "segment";
+  readonly #sortKeyFieldName = "id";
   //
-  readonly #tableNamePrefixProd = "hospiman_mgt_";
-  #schema: Joi.Schema;
-  #marshaller: Marshaller;
-  #tableFields: string[] = [];
-  #tableConfig: ITableConfig<T>;
-  #tableFullName: string;
+  readonly #dynamoDbClient: () => DocumentClient;
+  readonly #dynamoDb: () => DynamoDB;
+  readonly #schema: Joi.Schema;
+  readonly #marshaller: Marshaller;
+  readonly #tableFullName: string;
+  readonly #segmentPartitionValue: string;
+  readonly #secondaryIndexOptions: ISecondaryIndexDef<T>[];
 
   constructor({
-    tableConfig,
-    schemaDef,
-    canCreateTable,
-    schemaGroup,
+    dynamoDb,
+    schema,
+    dynamoDbClient,
+    secondaryIndexOptions,
+    segmentPartitionValue,
+    tableFullName,
   }: IDynamoOptions<T>) {
     super();
+    this.#dynamoDb = dynamoDb;
+    this.#dynamoDbClient = dynamoDbClient;
+    this.#schema = schema;
+    this.#tableFullName = tableFullName;
     this.#marshaller = new Marshaller({ onEmpty: "omit" });
-    //
-    this.#tableConfig = tableConfig;
-
-    this.#tableNamePrefix = "table_prefix";
-
-    const tableName = this.#tableConfig.tableName;
-    const avoidDefaultTablePrefix = this.#tableConfig.avoidDefaultTablePrefix;
-
-    this.#tableFullName =
-      avoidDefaultTablePrefix === true
-        ? tableName
-        : `${this.#tableNamePrefix}${tableName}`;
-    //
-    this.#schema = BaseSchemaModelService.createCoreSchema(schemaDef);
-    //
-    if (canCreateTable) {
-      this.allCreateTableIfNotExistsBase().catch((e) =>
-        LoggingService.log({
-          "@canCreateTable": e,
-        })
-      );
-    }
+    this.#segmentPartitionValue = segmentPartitionValue;
+    this.#secondaryIndexOptions = secondaryIndexOptions;
   }
 
   private _dynamoDbClient(): DocumentClient {
-    return MyDynamoConnection.dynamoDbClientInst();
+    return this.#dynamoDbClient();
   }
 
   private _dynamoDb(): DynamoDB {
-    return MyDynamoConnection.dynamoDbInst();
+    return this.#dynamoDb();
   }
 
-  protected allTableFullNameBase() {
-    return Promise.resolve(this.#tableFullName);
+  private generateDynamoTableKey() {
+    return generateDynamoTableKey();
   }
 
-  protected abstract async allCreateTableIfNotExists(): Promise<DynamoDB.TableDescription | null>;
+  private _getLocalVariables() {
+    return {
+      partitionKeyFieldName: this.#partitionKeyFieldName,
+      sortKeyFieldName: this.#sortKeyFieldName,
+      segmentPartitionValue: this.#segmentPartitionValue,
+      tableFullName: this.#tableFullName,
+      secondaryIndexOptions: this.#secondaryIndexOptions,
+    } as const;
+  }
+
+  private _getBaseObject({ dataId }: { dataId: string }) {
+    const {
+      partitionKeyFieldName,
+      sortKeyFieldName,
+      segmentPartitionValue,
+    } = this._getLocalVariables();
+
+    const dataMust = {
+      [partitionKeyFieldName]: segmentPartitionValue,
+      [sortKeyFieldName]: dataId,
+    };
+    return dataMust;
+  }
+
+  protected async allCreateOneBase({ data }: { data: T }) {
+    const { tableFullName, sortKeyFieldName } = this._getLocalVariables();
+
+    let dataId: string | undefined = data[sortKeyFieldName];
+
+    if (!dataId) {
+      dataId = this.generateDynamoTableKey();
+    }
+
+    const dataMust = this._getBaseObject({ dataId });
+    const fullData = { ...data, ...dataMust };
+
+    const {
+      validatedData,
+      marshalled,
+    } = await this._allHelpValidateMarshallAndGetValue(fullData);
+
+    const params: DocumentClient.PutItemInput = {
+      TableName: tableFullName,
+      Item: marshalled,
+    };
+
+    await this._dynamoDb().putItem(params).promise();
+    const result: T = validatedData;
+    return result;
+  }
+
+  protected async allGetOneByIdBase({ dataId }: { dataId: string }) {
+    const {
+      partitionKeyFieldName,
+      sortKeyFieldName,
+      segmentPartitionValue,
+      tableFullName,
+    } = this._getLocalVariables();
+
+    this.allHelpValidateRequiredString({
+      QueryGetOnePartitionKey: segmentPartitionValue,
+      QueryGetOneSortKey: dataId,
+    });
+
+    const params: DocumentClient.GetItemInput = {
+      TableName: tableFullName,
+      Key: {
+        [partitionKeyFieldName]: segmentPartitionValue,
+        [sortKeyFieldName]: dataId,
+      },
+    };
+    const _data = await this._dynamoDbClient().get(params).promise();
+    const data: T = _data.Item as any;
+    if (data) return data;
+    return null;
+  }
+
+  protected async allGetOneByIdProjectBase<TExpectedVals = T>({
+    dataId,
+    projectionAttributes,
+  }: {
+    dataId: string;
+    projectionAttributes: (keyof TExpectedVals)[];
+  }) {
+    this.allHelpValidateRequiredString({ Get1DataId: dataId });
+
+    const {
+      partitionKeyFieldName,
+      sortKeyFieldName,
+      segmentPartitionValue,
+      tableFullName,
+    } = this._getLocalVariables();
+
+    const params: DocumentClient.GetItemInput = {
+      TableName: tableFullName,
+      Key: {
+        [partitionKeyFieldName]: segmentPartitionValue,
+        [sortKeyFieldName]: dataId,
+      },
+      ProjectionExpression: projectionAttributes.join(", ").trim(),
+    };
+
+    const _data = await this._dynamoDbClient().get(params).promise();
+    const data: TExpectedVals = _data.Item as any;
+    return data;
+  }
+
+  protected async allUpdateOneDirectBase({ data }: { data: T }) {
+    const { tableFullName, sortKeyFieldName } = this._getLocalVariables();
+
+    const dataId: string | undefined = data[sortKeyFieldName];
+
+    if (!dataId) {
+      throw new GenericDataError("Update data requires sort key field value");
+    }
+
+    const dataMust = this._getBaseObject({ dataId });
+
+    const fullData = { ...data, ...dataMust };
+    //
+    const {
+      validatedData,
+      marshalled,
+    } = await this._allHelpValidateMarshallAndGetValue(fullData);
+
+    const params: DocumentClient.PutItemInput = {
+      TableName: tableFullName,
+      Item: marshalled,
+    };
+
+    await this._dynamoDb().putItem(params).promise();
+    const result: T = validatedData;
+    return result;
+  }
+
+  protected async allUpdateOneByIdBase({
+    dataId,
+    data,
+  }: {
+    dataId: string;
+    data: T;
+  }) {
+    const { tableFullName, sortKeyFieldName } = this._getLocalVariables();
+    this.allHelpValidateRequiredString({ Update1DataId: dataId });
+
+    const dataInDb = await this.allGetOneByIdBase({ dataId });
+
+    if (!(dataInDb && dataInDb[sortKeyFieldName])) {
+      throw new GenericDataError("Data does NOT exists");
+    }
+
+    const dataMust = this._getBaseObject({
+      dataId: dataInDb[sortKeyFieldName],
+    });
+
+    const fullData = { ...dataInDb, ...data, ...dataMust };
+
+    const {
+      validatedData,
+      marshalled,
+    } = await this._allHelpValidateMarshallAndGetValue(fullData);
+
+    const params: DocumentClient.PutItemInput = {
+      TableName: tableFullName,
+      Item: marshalled,
+    };
+
+    await this._dynamoDb().putItem(params).promise();
+    const result: T = validatedData;
+    return result;
+  }
+
+  private async _allHelpValidateMarshallAndGetValue(data: any) {
+    const { error, value } = this.#schema.validate(data, {
+      stripUnknown: true,
+    });
+
+    if (error) {
+      LoggingService.log({ "@JoiValidate": "", error, value });
+      return await Promise.reject(getJoiValidationErrors(error));
+    }
+    const marshalledData = this.#marshaller.marshallItem(value);
+    return {
+      validatedData: value,
+      marshalled: marshalledData,
+    };
+  }
+
+  //================================
 
   protected async allGetListOfTablesNamesOnlineBase() {
     const params: DynamoDB.ListTablesInput = {
@@ -105,10 +274,6 @@ export abstract class AppDynamoDataOperation<T> extends DynamoHelperMixins {
     return listOfTables?.TableNames;
   }
 
-  protected allGetTableFieldNamesBase() {
-    return [...this.#tableFields];
-  }
-
   protected async allTableSettingUpdateTTLBase({
     attrName,
     isEnabled,
@@ -116,8 +281,10 @@ export abstract class AppDynamoDataOperation<T> extends DynamoHelperMixins {
     attrName: keyof T;
     isEnabled: boolean;
   }) {
+    const { tableFullName } = this._getLocalVariables();
+
     const params: DynamoDB.Types.UpdateTimeToLiveInput = {
-      TableName: this.#tableFullName,
+      TableName: tableFullName,
       TimeToLiveSpecification: {
         AttributeName: attrName as string,
         Enabled: isEnabled,
@@ -128,6 +295,426 @@ export abstract class AppDynamoDataOperation<T> extends DynamoHelperMixins {
       return result.TimeToLiveSpecification;
     }
     return null;
+  }
+
+  protected async allGetTableInfoBase() {
+    try {
+      const { tableFullName } = this._getLocalVariables();
+
+      const params: DynamoDB.DescribeTableInput = {
+        TableName: tableFullName,
+      };
+      const result = await this._dynamoDb().describeTable(params).promise();
+      if (result?.Table?.TableName === tableFullName) {
+        return result.Table;
+      }
+      return null;
+    } catch (error) {
+      LoggingService.log({ "@allGetTableInfoBase": "", error: error?.message });
+      return null;
+    }
+  }
+
+  protected async allCheckTableExistsBase() {
+    const result = await this.allGetTableInfoBase();
+    if (!result) {
+      return false;
+    }
+    if (result?.GlobalSecondaryIndexes) {
+      // console.log(JSON.stringify({ tableInfo: result }, null, 2));
+    }
+    return true;
+  }
+
+  protected async allCreateTableIfNotExistsBase() {
+    const { secondaryIndexOptions } = this._getLocalVariables();
+
+    const existingTableInfo = await this.allGetTableInfoBase();
+    if (existingTableInfo) {
+      if (secondaryIndexOptions?.length) {
+        await this._allUpdateGlobalSecondaryIndexBase({
+          secondaryIndexOptions,
+          existingTableInfo,
+        });
+      } else if (existingTableInfo.GlobalSecondaryIndexes?.length) {
+        await this._allUpdateGlobalSecondaryIndexBase({
+          secondaryIndexOptions: [],
+          existingTableInfo,
+        });
+      }
+      return null;
+    }
+    return await this.allCreateTableBase();
+  }
+
+  protected async allCreateTableBase() {
+    const {
+      partitionKeyFieldName,
+      sortKeyFieldName,
+      tableFullName,
+      secondaryIndexOptions,
+    } = this._getLocalVariables();
+
+    const params: DynamoDB.CreateTableInput = {
+      AttributeDefinitions: [
+        {
+          AttributeName: partitionKeyFieldName,
+          AttributeType: "S",
+        },
+        {
+          AttributeName: sortKeyFieldName,
+          AttributeType: "S",
+        },
+      ],
+      KeySchema: [
+        {
+          AttributeName: partitionKeyFieldName,
+          KeyType: "HASH",
+        },
+        {
+          AttributeName: sortKeyFieldName,
+          KeyType: "RANGE",
+        },
+      ],
+      BillingMode: "PAY_PER_REQUEST",
+      TableName: tableFullName,
+    };
+
+    params.Tags = [
+      {
+        Key: "tablePrefix",
+        Value: tableFullName,
+      },
+      {
+        Key: `DDBTableGroupKey-${tableFullName}`,
+        Value: tableFullName,
+      },
+    ];
+
+    if (secondaryIndexOptions?.length) {
+      const creationParams = this._getGlobalSecondaryIndexCreationParams(
+        secondaryIndexOptions
+      );
+      if (creationParams.xAttributeDefinitions?.length) {
+        const existAttrDefNames = params.AttributeDefinitions.map(
+          (def) => def.AttributeName
+        );
+        creationParams.xAttributeDefinitions.forEach((def) => {
+          const alreadyDefined = existAttrDefNames.includes(def.AttributeName);
+          if (!alreadyDefined) {
+            params.AttributeDefinitions.push(def);
+          }
+        });
+      }
+      params.GlobalSecondaryIndexes = [...creationParams.xGlobalSecondaryIndex];
+    }
+
+    LoggingService.log({
+      "@allCreateTableBase, table: ": tableFullName,
+    });
+
+    const result = await this._dynamoDb().createTable(params).promise();
+
+    if (result?.TableDescription) {
+      LoggingService.log(
+        [
+          `@allCreateTableBase,`,
+          `Created table: '${result?.TableDescription.TableName}'`,
+          new Date().toTimeString(),
+        ].join(" ")
+      );
+      return result.TableDescription;
+    }
+    return null;
+  }
+
+  protected async allDeleteGlobalSecondaryIndexBase(indexName: string) {
+    const { tableFullName } = this._getLocalVariables();
+
+    const params: DynamoDB.UpdateTableInput = {
+      TableName: tableFullName,
+      GlobalSecondaryIndexUpdates: [
+        {
+          Delete: {
+            IndexName: indexName,
+          },
+        },
+      ],
+    };
+    const result = await this._dynamoDb().updateTable(params).promise();
+    if (result?.TableDescription) {
+      return result.TableDescription;
+    }
+    return null;
+  }
+
+  protected async allExistsByIdBase(dataId: string) {
+    this.allHelpValidateRequiredString({ Exist1DataId: dataId });
+
+    const { sortKeyFieldName } = this._getLocalVariables();
+
+    type IProject = {
+      [sortKeyFieldName]: string;
+    };
+
+    const data = await this.allGetOneByIdProjectBase<IProject>({
+      dataId,
+      projectionAttributes: [sortKeyFieldName],
+    });
+    if (data && data[sortKeyFieldName]) {
+      return true;
+    }
+    return false;
+  }
+
+  private _getGlobalSecondaryIndexCreationParams(
+    secondaryIndexOptions: ISecondaryIndexDef<T>[]
+  ) {
+    const { tableFullName } = this._getLocalVariables();
+    const params: DynamoDB.CreateTableInput = {
+      KeySchema: [], //  make linter happy
+      AttributeDefinitions: [],
+      TableName: tableFullName,
+      GlobalSecondaryIndexes: [],
+    };
+
+    const attributeDefinitionsNameList: string[] = [];
+
+    secondaryIndexOptions.forEach((sIndex) => {
+      const {
+        indexName,
+        keyFieldName,
+        sortFieldName,
+        dataType,
+        projectionFieldsInclude,
+      } = sIndex;
+      //
+      const _keyFieldName = keyFieldName as string;
+      const _sortFieldName = sortFieldName as string;
+
+      if (!attributeDefinitionsNameList.includes(_keyFieldName)) {
+        attributeDefinitionsNameList.push(_keyFieldName);
+        params?.AttributeDefinitions?.push({
+          AttributeName: _keyFieldName,
+          AttributeType: dataType,
+        });
+      }
+
+      if (!attributeDefinitionsNameList.includes(_sortFieldName)) {
+        attributeDefinitionsNameList.push(_sortFieldName);
+        params?.AttributeDefinitions?.push({
+          AttributeName: _sortFieldName,
+          AttributeType: dataType,
+        });
+      }
+
+      let projectionFields = (projectionFieldsInclude || []) as string[];
+      let projectionType: AWS.DynamoDB.ProjectionType = "ALL";
+
+      if (projectionFields?.length) {
+        // remove frimary keys from include
+        projectionFields = projectionFields.filter((field) => {
+          return field !== _keyFieldName && field !== _sortFieldName;
+        });
+        if (projectionFields.length === 0) {
+          // only keys was projceted
+          projectionType = "KEYS_ONLY";
+        } else {
+          // only keys was projceted
+          projectionType = "INCLUDE";
+        }
+      }
+
+      params.GlobalSecondaryIndexes?.push({
+        IndexName: indexName,
+        Projection: {
+          ProjectionType: projectionType,
+          NonKeyAttributes:
+            projectionType === "INCLUDE" ? projectionFields : undefined,
+        },
+        KeySchema: [
+          {
+            AttributeName: _keyFieldName,
+            KeyType: "HASH",
+          },
+          {
+            AttributeName: _sortFieldName,
+            KeyType: "RANGE",
+          },
+        ],
+      });
+    });
+    return {
+      xAttributeDefinitions: params.AttributeDefinitions || [],
+      xGlobalSecondaryIndex: params.GlobalSecondaryIndexes || [],
+    };
+  }
+
+  private async _allUpdateGlobalSecondaryIndexBase({
+    secondaryIndexOptions,
+    existingTableInfo,
+  }: {
+    secondaryIndexOptions: ISecondaryIndexDef<T>[];
+    existingTableInfo: DynamoDB.TableDescription;
+  }): Promise<DynamoDB.TableDescription[] | null> {
+    try {
+      const existingIndexNames: string[] = [];
+      const staledIndexNames: string[] = [];
+      const allIndexNames: string[] = [];
+      const newSecondaryIndexOptions: ISecondaryIndexDef<T>[] = [];
+
+      const updateResults: DynamoDB.TableDescription[] = [];
+
+      if (existingTableInfo?.GlobalSecondaryIndexes?.length) {
+        existingTableInfo?.GlobalSecondaryIndexes.forEach((indexInfo) => {
+          if (indexInfo.IndexName) {
+            existingIndexNames.push(indexInfo.IndexName);
+          }
+        });
+      }
+
+      secondaryIndexOptions?.forEach((newIndexInfo) => {
+        allIndexNames.push(newIndexInfo.indexName);
+        const indexExists = existingIndexNames.includes(newIndexInfo.indexName);
+        if (!indexExists) {
+          newSecondaryIndexOptions.push(newIndexInfo);
+        }
+      });
+
+      existingIndexNames.forEach((indexName) => {
+        const existsInList = allIndexNames.includes(indexName);
+        if (!existsInList) {
+          staledIndexNames.push(indexName);
+        }
+      });
+
+      if (!(newSecondaryIndexOptions.length || staledIndexNames.length)) {
+        return null;
+      }
+
+      let canUpdate = false;
+
+      const { tableFullName } = this._getLocalVariables();
+
+      LoggingService.log({
+        secondaryIndexOptions: secondaryIndexOptions.length,
+        newSecondaryIndexOptions: newSecondaryIndexOptions.length,
+        staledIndexNames: staledIndexNames.length,
+        tableName: tableFullName,
+      });
+
+      if (newSecondaryIndexOptions.length) {
+        canUpdate = true;
+        let indexCount = 0;
+        for (const indexOption of newSecondaryIndexOptions) {
+          const params: DynamoDB.UpdateTableInput = {
+            TableName: tableFullName,
+            GlobalSecondaryIndexUpdates: [],
+          };
+          indexCount++;
+
+          const creationParams = this._getGlobalSecondaryIndexCreationParams([
+            indexOption,
+          ]);
+
+          const indexName = creationParams.xGlobalSecondaryIndex[0].IndexName;
+
+          params.AttributeDefinitions = [
+            ...creationParams.xAttributeDefinitions,
+          ];
+
+          creationParams.xGlobalSecondaryIndex.forEach((gsi) => {
+            params.GlobalSecondaryIndexUpdates?.push({
+              Create: {
+                ...gsi,
+              },
+            });
+          });
+
+          const result = await this._dynamoDb().updateTable(params).promise();
+          if (result?.TableDescription) {
+            updateResults.push(result?.TableDescription);
+          }
+
+          LoggingService.log(
+            [
+              `Creating Index: '${indexName}'`,
+              `on table '${tableFullName}' started:`,
+              new Date().toTimeString(),
+            ].join(" ")
+          );
+
+          if (indexCount !== newSecondaryIndexOptions.length) {
+            const label = `Created Index '${indexName}'`;
+            console.time(label);
+            await UtilService.waitUntilMunites(5);
+            console.timeEnd(label);
+          }
+        }
+      }
+
+      if (staledIndexNames.length) {
+        if (canUpdate) {
+          await UtilService.waitUntilMunites(4);
+        }
+        canUpdate = true;
+        let indexCount = 0;
+
+        for (const indexName of staledIndexNames) {
+          const params: DynamoDB.UpdateTableInput = {
+            TableName: tableFullName,
+            GlobalSecondaryIndexUpdates: [],
+          };
+
+          indexCount++;
+
+          params.GlobalSecondaryIndexUpdates?.push({
+            Delete: {
+              IndexName: indexName,
+            },
+          });
+
+          const result = await this._dynamoDb().updateTable(params).promise();
+          if (result?.TableDescription) {
+            updateResults.push(result?.TableDescription);
+          }
+
+          LoggingService.log(
+            [
+              `Deleting Index: '${indexName}'`,
+              `on table '${tableFullName}' started:`,
+              new Date().toTimeString(),
+            ].join(" ")
+          );
+
+          if (indexCount !== staledIndexNames.length) {
+            const label = `Deleted Index '${indexName}'`;
+            console.time(label);
+            await UtilService.waitUntilMunites(1);
+            console.timeEnd(label);
+          }
+        }
+      }
+
+      if (!canUpdate) {
+        return null;
+      }
+
+      if (updateResults.length) {
+        console.log({
+          "@allCreateGlobalSecondaryIndexBase": "",
+          updateResults,
+        });
+        return updateResults;
+      }
+      return null;
+    } catch (error) {
+      LoggingService.log({
+        "@allCreateGlobalSecondaryIndexBase": "",
+        error: error?.message,
+      });
+      return null;
+    }
   }
 
   protected async allQueryBySecondaryIndexBase<T>({
@@ -153,6 +740,218 @@ export abstract class AppDynamoDataOperation<T> extends DynamoHelperMixins {
     return [];
   }
 
+  protected async allQueryGetManyByConditionBase(
+    paramOptions: IDynamoQueryParamOptions<T>
+  ) {
+    paramOptions.pagingParams = undefined;
+    const result = await this.allQueryGetManyByConditionPaginateBase(
+      paramOptions
+    );
+    if (result?.mainResult?.length) {
+      return result.mainResult;
+    }
+    return [];
+  }
+
+  protected async allQueryGetManyByConditionPaginateBase(
+    paramOptions: IDynamoQueryParamOptions<T>
+  ) {
+    const {
+      tableFullName,
+      sortKeyFieldName,
+      partitionKeyFieldName,
+    } = this._getLocalVariables();
+    //
+    if (!paramOptions?.partitionSortKeyQuery?.partitionKeyEquals) {
+      throw new GenericDataError("Invalid Hash key value");
+    }
+    if (!sortKeyFieldName) {
+      throw new GenericDataError("Bad query sort configuration");
+    }
+
+    let sortKeyQuery: any = {};
+
+    const sortKeyQueryData = paramOptions.partitionSortKeyQuery.sortKeyQuery;
+    if (sortKeyQueryData) {
+      if (sortKeyQueryData[sortKeyFieldName]) {
+        sortKeyQuery = {
+          [sortKeyFieldName]: sortKeyQueryData[sortKeyFieldName],
+        };
+      } else {
+        throw new GenericDataError("Invalid Sort key value");
+      }
+    }
+
+    const filterHashSortKey = this.__helperDynamoFilterOperation({
+      queryDefs: {
+        ...sortKeyQuery,
+        ...{
+          [partitionKeyFieldName]:
+            paramOptions.partitionSortKeyQuery.partitionKeyEquals,
+        },
+      },
+      projectionFields: paramOptions?.fields ?? undefined,
+    });
+    //
+    //
+    let otherFilterExpression: string | undefined = undefined;
+    let otherExpressionAttributeValues: any = undefined;
+    let otherExpressionAttributeNames: any = undefined;
+    if (paramOptions?.query) {
+      const filterOtherAttributes = this.__helperDynamoFilterOperation({
+        queryDefs: paramOptions.query,
+        projectionFields: null,
+      });
+
+      otherExpressionAttributeValues =
+        filterOtherAttributes.expressionAttributeValues;
+      otherExpressionAttributeNames =
+        filterOtherAttributes.expressionAttributeNames;
+
+      if (
+        filterOtherAttributes?.filterExpression &&
+        filterOtherAttributes?.filterExpression.length > 1
+      ) {
+        otherFilterExpression = filterOtherAttributes.filterExpression;
+      }
+    }
+
+    const params: DocumentClient.QueryInput = {
+      TableName: tableFullName,
+      KeyConditionExpression: filterHashSortKey.filterExpression,
+      ExpressionAttributeValues: {
+        ...otherExpressionAttributeValues,
+        ...filterHashSortKey.expressionAttributeValues,
+      },
+      FilterExpression: otherFilterExpression ?? undefined,
+      ExpressionAttributeNames: {
+        ...otherExpressionAttributeNames,
+        ...filterHashSortKey.expressionAttributeNames,
+      },
+    };
+
+    if (filterHashSortKey?.projectionExpressionAttr) {
+      params.ProjectionExpression = filterHashSortKey.projectionExpressionAttr;
+    }
+
+    if (paramOptions?.pagingParams?.orderDesc === true) {
+      params.ScanIndexForward = false;
+    }
+
+    const hashKeyAndSortKey: [string, string] = [
+      partitionKeyFieldName,
+      sortKeyFieldName,
+    ];
+
+    const paginationObjects = { ...paramOptions.pagingParams };
+    const result = await this.__helperDynamoQueryProcessor<T>({
+      params,
+      hashKeyAndSortKey,
+      ...paginationObjects,
+    });
+    return result;
+  }
+
+  protected async allBatchGetManyByHashAndSortKey({
+    dataIds,
+    fields,
+  }: {
+    dataIds: string[];
+    fields?: (keyof T)[];
+  }) {
+    dataIds.forEach((sortKeyValue) => {
+      this.allHelpValidateRequiredString({
+        BatchGetSortKey: sortKeyValue,
+      });
+    });
+    return new Promise<T[]>((resolve, reject) => {
+      const {
+        tableFullName,
+        partitionKeyFieldName,
+        sortKeyFieldName,
+        segmentPartitionValue,
+      } = this._getLocalVariables();
+
+      const getArray: DynamoDB.Key[] = dataIds.map((sortKeyValue) => {
+        const params01 = {
+          [partitionKeyFieldName]: { S: segmentPartitionValue },
+          [sortKeyFieldName]: { S: sortKeyValue },
+        };
+        return params01;
+      });
+
+      let projectionExpression: string | undefined = undefined;
+      let expressionAttributeNames:
+        | DynamoDB.ExpressionAttributeNameMap
+        | undefined = undefined;
+
+      if (fields?.length) {
+        const _fields: any[] = [...fields];
+        expressionAttributeNames = {};
+        _fields.forEach((fieldName) => {
+          if (typeof fieldName === "string") {
+            if (expressionAttributeNames) {
+              const attrKeyHash = `#attrKey${getRandom()}k`.toLowerCase();
+              expressionAttributeNames[attrKeyHash] = fieldName;
+            }
+          }
+        });
+        if (Object.keys(expressionAttributeNames)?.length) {
+          projectionExpression = Object.keys(expressionAttributeNames).join(
+            ","
+          );
+        } else {
+          projectionExpression = undefined;
+          expressionAttributeNames = undefined;
+        }
+      }
+
+      const params: DynamoDB.BatchGetItemInput = {
+        RequestItems: {
+          [tableFullName]: {
+            Keys: [...getArray],
+            ConsistentRead: true,
+            ProjectionExpression: projectionExpression,
+            ExpressionAttributeNames: expressionAttributeNames,
+          },
+        },
+      };
+
+      let returnedItems: any[] = [];
+
+      const batchGetUntilDone = (
+        err: AWS.AWSError,
+        data: DynamoDB.BatchGetItemOutput
+      ) => {
+        if (err) {
+          if (returnedItems?.length) {
+            resolve(returnedItems);
+          } else {
+            reject(err.stack);
+          }
+        } else {
+          if (data?.Responses) {
+            const itemListRaw = data.Responses[tableFullName];
+            const itemList = itemListRaw.map((item) => {
+              return this.#marshaller.unmarshallItem(item);
+            });
+            returnedItems = [...returnedItems, ...itemList];
+          }
+          if (data?.UnprocessedKeys) {
+            const _params: DynamoDB.BatchGetItemInput = {
+              RequestItems: data.UnprocessedKeys,
+            };
+            console.log({ dynamoBatchGetParams: _params });
+            this._dynamoDb().batchGetItem(_params, batchGetUntilDone);
+          } else {
+            resolve(returnedItems);
+          }
+        }
+      };
+      this._dynamoDb().batchGetItem(params, batchGetUntilDone);
+    });
+  }
+
   protected async allQueryBySecondaryIndexPaginateBase<T>({
     keyQueryEquals: { keyFieldName, value },
     secondaryIndexName,
@@ -164,15 +963,15 @@ export abstract class AppDynamoDataOperation<T> extends DynamoHelperMixins {
     orderDesc?: boolean;
     sortKeyQueryOptions?: IDynamoQuerySecondaryParamOptions<T>;
   }) {
-    if (!this.#tableConfig?.secondaryIndexOptions?.length) {
+    const { tableFullName, secondaryIndexOptions } = this._getLocalVariables();
+
+    if (!secondaryIndexOptions?.length) {
       throw new GenericDataError("Invalid secondary index definitions");
     }
 
-    const secondaryIndex = this.#tableConfig.secondaryIndexOptions.find(
-      ({ indexName }) => {
-        return secondaryIndexName === indexName;
-      }
-    );
+    const secondaryIndex = secondaryIndexOptions.find(({ indexName }) => {
+      return secondaryIndexName === indexName;
+    });
 
     if (!secondaryIndex) {
       throw new GenericDataError("Invalid secondary index name");
@@ -204,12 +1003,11 @@ export abstract class AppDynamoDataOperation<T> extends DynamoHelperMixins {
     });
 
     const params: DocumentClient.QueryInput = {
-      TableName: this.#tableFullName,
+      TableName: tableFullName,
       IndexName: secondaryIndexName,
       KeyConditionExpression: filterExpression,
       //
       ExpressionAttributeValues: expressionAttributeValues,
-      // FilterExpression: filterExpression,
       ExpressionAttributeNames: expressionAttributeNames,
     };
 
@@ -237,270 +1035,76 @@ export abstract class AppDynamoDataOperation<T> extends DynamoHelperMixins {
     return result;
   }
 
-  protected async allQueryExistsByConditionBase(
-    paramOptions: IDynamoQueryParamOptions<T>
-  ): Promise<boolean> {
-    const result = await this.allQueryGetOneByConditionBase(paramOptions);
-    if (result) {
-      return true;
-    }
-    return false;
-  }
-
-  protected async allQueryGetOneByConditionBase<TExpectedVals = T>(
-    paramOptions: IDynamoQueryParamOptions<T>
-  ): Promise<TExpectedVals | null> {
-    paramOptions.pagingParams = { pageSize: 1 };
-    const result = await this.allQueryGetManyByConditionPaginateBase(
-      paramOptions
-    );
-    if (result?.mainResult?.length) {
-      const resultData: TExpectedVals = result.mainResult[0] as any;
-      return resultData;
-    }
-    return null;
-  }
-
-  private _allErrorThrowNewErrorIfTableDoesNotHave_id_asOnlyHashPrimaryKey() {
-    if (this.#tableConfig.primaryHashKey !== "id") {
-      throw new GenericDataError(
-        `Invalid search by primary key. Must have 'id' as primary.`
-      );
-    }
-    if (this.#tableConfig.primaryRangeSortKey) {
-      throw new GenericDataError(
-        `Invalid search by primary key. Accepts only 'id' as primary.`
-      );
-    }
-  }
-
-  private _allErrorThrowNewErrorIfTableDoesNotHave_HashKey_and_sortKey_asPrimaryKey() {
-    if (
-      !(
-        this.#tableConfig.primaryHashKey &&
-        this.#tableConfig.primaryRangeSortKey
-      )
-    ) {
-      throw new GenericDataError(
-        "Invalid search by primary key. Accepts hash and sort only."
-      );
-    }
-  }
-
-  protected async allBatchGetManyByHashAndSortKey({
-    hashSortKeys,
-    fields,
+  protected async allDeleteByIdBase({
+    dataId,
   }: {
-    hashSortKeys: {
-      hashKeyValue: string;
-      sortKeyValue: string;
-    }[];
-    fields?: (keyof T)[];
-  }) {
-    this._allErrorThrowNewErrorIfTableDoesNotHave_HashKey_and_sortKey_asPrimaryKey();
-    //
-    hashSortKeys.forEach(({ hashKeyValue, sortKeyValue }) => {
-      this.allHelpValidateRequiredString({
-        BatchGetHashKey: hashKeyValue,
-        BatchGetSortKey: sortKeyValue,
-      });
-    });
-
-    return new Promise<T[]>((resolve, reject) => {
-      const hashKeyName = this.#tableConfig.primaryHashKey;
-      const sortKeyName = this.#tableConfig.primaryRangeSortKey || "";
-
-      const getArray: DynamoDB.Key[] = hashSortKeys.map(
-        ({ hashKeyValue, sortKeyValue }) => {
-          const params01 = {
-            [hashKeyName]: { S: hashKeyValue },
-            [sortKeyName]: { S: sortKeyValue },
-          };
-          return params01;
-        }
-      );
-
-      const fullTableName = this.#tableFullName;
-
-      let projectionExpression: string | undefined = undefined;
-      let expressionAttributeNames:
-        | DynamoDB.ExpressionAttributeNameMap
-        | undefined = undefined;
-
-      if (fields?.length) {
-        const _fields: any[] = [...fields];
-        expressionAttributeNames = {};
-        _fields.forEach((fieldName) => {
-          if (typeof fieldName === "string") {
-            if (expressionAttributeNames) {
-              const attrKeyHash = `#attrKey${getRandom()}k`.toLowerCase();
-              expressionAttributeNames[attrKeyHash] = fieldName;
-            }
-          }
-        });
-        if (Object.keys(expressionAttributeNames)?.length) {
-          projectionExpression = Object.keys(expressionAttributeNames).join(
-            ","
-          );
-        } else {
-          projectionExpression = undefined;
-          expressionAttributeNames = undefined;
-        }
-      }
-
-      const params: DynamoDB.BatchGetItemInput = {
-        RequestItems: {
-          [fullTableName]: {
-            Keys: [...getArray],
-            ConsistentRead: true,
-            ProjectionExpression: projectionExpression,
-            ExpressionAttributeNames: expressionAttributeNames,
-          },
-        },
-      };
-
-      let returnedItems: any[] = [];
-
-      const batchGetUntilDone = (
-        err: AWS.AWSError,
-        data: DynamoDB.BatchGetItemOutput
-      ) => {
-        if (err) {
-          if (returnedItems?.length) {
-            resolve(returnedItems);
-          } else {
-            reject(err.stack);
-          }
-        } else {
-          if (data?.Responses) {
-            const itemListRaw = data.Responses[fullTableName];
-            const itemList = itemListRaw.map((item) => {
-              return this.#marshaller.unmarshallItem(item);
-            });
-            returnedItems = [...returnedItems, ...itemList];
-          }
-          if (data?.UnprocessedKeys) {
-            const _params: DynamoDB.BatchGetItemInput = {
-              RequestItems: data.UnprocessedKeys,
-            };
-            console.log({ dynamoBatchGetParams: _params });
-            this._dynamoDb().batchGetItem(_params, batchGetUntilDone);
-          } else {
-            resolve(returnedItems);
-          }
-        }
-      };
-      this._dynamoDb().batchGetItem(params, batchGetUntilDone);
-    });
-  }
-
-  protected async allDeleteManyDangerouselyByHashAndSortKey({
-    hashSortKeys,
-  }: {
-    hashSortKeys: {
-      hashKeyValue: string;
-      sortKeyValue: string;
-    }[];
-  }): Promise<boolean> {
-    this._allErrorThrowNewErrorIfTableDoesNotHave_HashKey_and_sortKey_asPrimaryKey();
-
-    hashSortKeys.forEach(({ hashKeyValue, sortKeyValue }) => {
-      this.allHelpValidateRequiredString({
-        DelHashKey: hashKeyValue,
-        DelSortKey: sortKeyValue,
-      });
-    });
-
-    const hashKeyName = this.#tableConfig.primaryHashKey;
-    const sortKeyName = this.#tableConfig.primaryRangeSortKey || "";
-
-    const delArray = hashSortKeys.map(({ hashKeyValue, sortKeyValue }) => {
-      const params01: DynamoDB.WriteRequest = {
-        DeleteRequest: {
-          Key: {
-            [hashKeyName]: { S: hashKeyValue },
-            [sortKeyName]: { S: sortKeyValue },
-          },
-        },
-      };
-      return params01;
-    });
-
-    const fullTableName = this.#tableFullName;
-
-    const params: DynamoDB.BatchWriteItemInput = {
-      RequestItems: {
-        [fullTableName]: delArray,
-      },
-    };
-
-    await this._dynamoDb().batchWriteItem(params).promise();
-    return true;
-  }
-
-  protected async allDeleteManyDangerouselyByIds(
-    dataIds: string[]
-  ): Promise<boolean> {
-    this._allErrorThrowNewErrorIfTableDoesNotHave_id_asOnlyHashPrimaryKey();
-
-    const delArray = dataIds.map((dataId) => {
-      const params01: DynamoDB.WriteRequest = {
-        DeleteRequest: {
-          Key: {
-            id: { S: dataId },
-          },
-        },
-      };
-      return params01;
-    });
-
-    const fullTableName = this.#tableFullName;
-
-    const params: DynamoDB.BatchWriteItemInput = {
-      RequestItems: {
-        [fullTableName]: delArray,
-      },
-    };
-
-    await this._dynamoDb().batchWriteItem(params).promise();
-    return true;
-  }
-
-  protected async allDeleteByHashAndSortKeyBase({
-    hashKeyValue,
-    sortKeyValue,
-  }: {
-    hashKeyValue: string;
-    sortKeyValue: string;
+    dataId: string;
   }): Promise<T> {
-    this._allErrorThrowNewErrorIfTableDoesNotHave_HashKey_and_sortKey_asPrimaryKey();
+    //
+    this.allHelpValidateRequiredString({ Del1SortKey: dataId });
+    const {
+      tableFullName,
+      partitionKeyFieldName,
+      sortKeyFieldName,
+      segmentPartitionValue,
+    } = this._getLocalVariables();
 
-    this.allHelpValidateRequiredString({
-      Del1HashKey: hashKeyValue,
-      Del1SortKey: sortKeyValue,
-    });
+    const dataExist = await this.allDeleteByIdBase({ dataId });
 
-    const hashKeyName = this.#tableConfig.primaryHashKey;
-    const sortKeyName = this.#tableConfig.primaryRangeSortKey || "";
-
-    const dataExist = (await this.allQueryGetOneByHashAndSortBase({
-      hashKeyValue,
-      sortKeyValue,
-    })) as IBasicProps & T;
-
-    if (!(dataExist && dataExist.id)) {
+    if (!(dataExist && dataExist[sortKeyFieldName])) {
       throw new GenericDataError("Record does NOT exists");
     }
 
     const params: DocumentClient.DeleteItemInput = {
-      TableName: this.#tableFullName,
+      TableName: tableFullName,
       Key: {
-        [hashKeyName]: hashKeyValue,
-        [sortKeyName]: sortKeyValue,
+        [partitionKeyFieldName]: segmentPartitionValue,
+        [sortKeyFieldName]: dataId,
       },
     };
 
     await this._dynamoDbClient().delete(params).promise();
     return dataExist;
+  }
+
+  protected async allDeleteManyDangerouselyByIds({
+    dataIds,
+  }: {
+    dataIds: string[];
+  }): Promise<boolean> {
+    //
+    dataIds.forEach((sortKeyValue) => {
+      this.allHelpValidateRequiredString({
+        DelSortKey: sortKeyValue,
+      });
+    });
+
+    const {
+      tableFullName,
+      partitionKeyFieldName,
+      sortKeyFieldName,
+      segmentPartitionValue,
+    } = this._getLocalVariables();
+
+    const delArray = dataIds.map((sortKeyValue) => {
+      const params01: DynamoDB.WriteRequest = {
+        DeleteRequest: {
+          Key: {
+            [partitionKeyFieldName]: { S: segmentPartitionValue },
+            [sortKeyFieldName]: { S: sortKeyValue },
+          },
+        },
+      };
+      return params01;
+    });
+
+    const params: DynamoDB.BatchWriteItemInput = {
+      RequestItems: {
+        [tableFullName]: delArray,
+      },
+    };
+
+    await this._dynamoDb().batchWriteItem(params).promise();
+    return true;
   }
 }

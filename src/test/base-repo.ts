@@ -1,5 +1,5 @@
 import { ISecondaryIndexDef } from "../types/base-types";
-import { DataOperation } from "../new/operation";
+import { DataOperation } from "../core/dynamo-data-operation";
 import { MyDynamoConnection } from "src/test/connection";
 import Joi from "@hapi/joi";
 
