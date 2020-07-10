@@ -1,4 +1,4 @@
-import { ISecondaryIndexDef } from "../types/base-types";
+import { ISecondaryIndexDef } from "../types";
 import { DynamoDataOperation } from "../core/dynamo-data-operation";
 import { MyDynamoConnection } from "../test/connection";
 import Joi from "@hapi/joi";

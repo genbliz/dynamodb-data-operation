@@ -1,7 +1,7 @@
 import Joi from "@hapi/joi";
 import { dateISOValidation } from "./base-joi-helper";
 
-export interface ICoreEntityBaseModel {
+export interface IDynamoDataCoreEntityModel {
   id: string;
   partitionSegment: string;
   //

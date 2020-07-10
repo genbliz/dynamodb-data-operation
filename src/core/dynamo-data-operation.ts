@@ -1,7 +1,8 @@
 import type {
   IDynamoQueryParamOptions,
   IDynamoQuerySecondaryParamOptions,
-} from "./../types/base-declarations";
+  ISecondaryIndexDef,
+} from "../types";
 import { GenericDataError } from "./../helpers/errors";
 import { UtilService } from "../helpers/util-service";
 import { LoggingService } from "../helpers/logging-service";
@@ -9,10 +10,12 @@ import { DynamoDB } from "aws-sdk";
 import { DocumentClient } from "aws-sdk/clients/dynamodb";
 import Joi from "@hapi/joi";
 import { Marshaller } from "@aws/dynamodb-auto-marshaller";
-import type { ISecondaryIndexDef } from "../types/base-types";
 import { getJoiValidationErrors } from "../core/base-joi-helper";
 import BaseMixins from "../core/base-mixins";
-import { coreSchemaDefinition, ICoreEntityBaseModel } from "./base-schema";
+import {
+  coreSchemaDefinition,
+  IDynamoDataCoreEntityModel,
+} from "./base-schema";
 
 interface IDynamoOptions<T> {
   dynamoDb: () => DynamoDB;
@@ -40,8 +43,8 @@ function createTenantSchema(schemaMapDef: Joi.SchemaMap) {
 }
 
 export abstract class DynamoDataOperation<T> extends BaseMixins {
-  readonly #partitionKeyFieldName: keyof ICoreEntityBaseModel = "partitionSegment";
-  readonly #sortKeyFieldName: keyof ICoreEntityBaseModel = "id";
+  readonly #partitionKeyFieldName: keyof IDynamoDataCoreEntityModel = "partitionSegment";
+  readonly #sortKeyFieldName: keyof IDynamoDataCoreEntityModel = "id";
   //
   readonly #dynamoDbClient: () => DocumentClient;
   readonly #dynamoDb: () => DynamoDB;
@@ -122,7 +125,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
 
     const baseData = {
       createdAtDate: new Date().toISOString(),
-    } as ICoreEntityBaseModel;
+    } as IDynamoDataCoreEntityModel;
 
     const dataMust = this._getBaseObject({ dataId });
     const fullData = { ...data, ...baseData, ...dataMust };
@@ -211,7 +214,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
 
     const baseData = {
       lastModifiedDate: new Date().toISOString(),
-    } as ICoreEntityBaseModel;
+    } as IDynamoDataCoreEntityModel;
 
     const fullData = { ...data, ...baseData, ...dataMust };
     //

@@ -1,9 +1,6 @@
 import { LoggingService } from "../helpers/logging-service";
 import { UtilService } from "../helpers/util-service";
-import type {
-  IDynamoQueryConditionParams,
-  IQueryDefinition,
-} from "../types/base-declarations";
+import type { IDynamoQueryConditionParams, IQueryDefinition } from "../types";
 
 type FieldPartial<T> = { [P in keyof T]-?: any };
 const conditionKeyMap: FieldPartial<IDynamoQueryConditionParams> = {
