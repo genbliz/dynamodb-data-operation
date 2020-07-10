@@ -46,7 +46,7 @@ class MyRepositoryBase extends BaseRepository<IPayment> {
       withCondition: [
         {
           field: "invoiceId",
-          value: "",
+          equals: "",
         },
       ],
     });

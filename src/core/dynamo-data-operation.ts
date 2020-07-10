@@ -176,8 +176,8 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     withCondition?: IFieldCondition<T>;
   }) {
     if (item && withCondition?.length) {
-      const isPassed = withCondition.every(({ field, value }) => {
-        return item[field] !== undefined && item[field] === value;
+      const isPassed = withCondition.every(({ field, equals }) => {
+        return item[field] !== undefined && item[field] === equals;
       });
       return isPassed;
     }
