@@ -1,3 +1,5 @@
+import { v4 as uuidv4 } from "uuid";
+
 class UtilServiceBase {
   /** generate uuid */
 
@@ -109,6 +111,22 @@ class UtilServiceBase {
         resolve();
       }, Math.round(munites * 60 * 1000));
     });
+  }
+
+  generateDynamoTableKey(date?: any) {
+    const _now = date ? new Date(date) : new Date();
+    const key = [
+      `${_now.getFullYear()}`,
+      `${_now.getMonth() + 1}`.padStart(2, "0"),
+      `${_now.getDate()}`.padStart(2, "0"),
+      "-",
+      `${_now.getHours()}`.padStart(2, "0"),
+      `${_now.getMinutes()}`.padStart(2, "0"),
+      `${_now.getSeconds()}`.padStart(2, "0"),
+      "-",
+      uuidv4(),
+    ];
+    return key.join("");
   }
 }
 

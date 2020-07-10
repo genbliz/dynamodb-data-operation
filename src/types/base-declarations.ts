@@ -52,7 +52,7 @@ export type IDynamoPagingParams = {
   orderDesc?: boolean;
 };
 
-type QueryDefinition<T> = QueryPartialAll<Partial<T>> & {
+export type QueryDefinition<T> = QueryPartialAll<Partial<T>> & {
   $or?: QueryPartialAll<Partial<T>>[];
 };
 

@@ -1,5 +1,5 @@
-export function hello() {
-  console.log("Hello World");
-}
+export { DynamoDataOperation } from "./core/dynamo-data-operation";
+export { ICoreEntityBaseModel } from "./core/base-schema";
+export { GenericDataError } from "./helpers/errors";
 
-hello();
+export default DynamoDataOperation;

@@ -10,12 +10,13 @@ import { DocumentClient } from "aws-sdk/clients/dynamodb";
 import Joi from "@hapi/joi";
 import { Marshaller } from "@aws/dynamodb-auto-marshaller";
 import { ISecondaryIndexDef } from "../types/base-types";
-import { getJoiValidationErrors } from "src/core/base-joi-helper";
+import { getJoiValidationErrors } from "../core/base-joi-helper";
 import BaseMixins from "../core/base-mixins";
+import { coreSchemaDefinition, ICoreEntityBaseModel } from "./base-schema";
 
 interface IDynamoOptions<T> {
   dynamoDb: () => DynamoDB;
-  schema: Joi.Schema;
+  schemaDef: Joi.SchemaMap;
   dynamoDbClient: () => DocumentClient;
   segmentPartitionValue: string;
   secondaryIndexOptions: ISecondaryIndexDef<T>[];
@@ -23,7 +24,7 @@ interface IDynamoOptions<T> {
 }
 
 function generateDynamoTableKey() {
-  return Date.now().toString();
+  return UtilService.generateDynamoTableKey();
 }
 
 const getRandom = () =>
@@ -34,9 +35,13 @@ const getRandom = () =>
     Math.round(Math.random() * 99),
   ].join("");
 
-export abstract class DataOperation<T> extends BaseMixins {
-  readonly #partitionKeyFieldName = "segment";
-  readonly #sortKeyFieldName = "id";
+function createTenantSchema(schemaMapDef: Joi.SchemaMap) {
+  return Joi.object().keys(schemaMapDef).keys(coreSchemaDefinition);
+}
+
+export abstract class DynamoDataOperation<T> extends BaseMixins {
+  readonly #partitionKeyFieldName: keyof ICoreEntityBaseModel = "partitionSegment";
+  readonly #sortKeyFieldName: keyof ICoreEntityBaseModel = "id";
   //
   readonly #dynamoDbClient: () => DocumentClient;
   readonly #dynamoDb: () => DynamoDB;
@@ -48,7 +53,7 @@ export abstract class DataOperation<T> extends BaseMixins {
 
   constructor({
     dynamoDb,
-    schema,
+    schemaDef,
     dynamoDbClient,
     secondaryIndexOptions,
     segmentPartitionValue,
@@ -57,11 +62,17 @@ export abstract class DataOperation<T> extends BaseMixins {
     super();
     this.#dynamoDb = dynamoDb;
     this.#dynamoDbClient = dynamoDbClient;
-    this.#schema = schema;
+    this.#schema = createTenantSchema(schemaDef);
     this.#tableFullName = tableFullName;
     this.#marshaller = new Marshaller({ onEmpty: "omit" });
     this.#segmentPartitionValue = segmentPartitionValue;
     this.#secondaryIndexOptions = secondaryIndexOptions;
+
+    setTimeout(() => {
+      this.allCreateTableIfNotExistsBase().catch((error) => {
+        console.log(error);
+      });
+    }, 200);
   }
 
   private _dynamoDbClient(): DocumentClient {
@@ -109,8 +120,12 @@ export abstract class DataOperation<T> extends BaseMixins {
       dataId = this.generateDynamoTableKey();
     }
 
+    const baseData = {
+      createdAtDate: new Date().toISOString(),
+    } as ICoreEntityBaseModel;
+
     const dataMust = this._getBaseObject({ dataId });
-    const fullData = { ...data, ...dataMust };
+    const fullData = { ...data, ...baseData, ...dataMust };
 
     const {
       validatedData,
@@ -194,7 +209,11 @@ export abstract class DataOperation<T> extends BaseMixins {
 
     const dataMust = this._getBaseObject({ dataId });
 
-    const fullData = { ...data, ...dataMust };
+    const baseData = {
+      lastModifiedDate: new Date().toISOString(),
+    } as ICoreEntityBaseModel;
+
+    const fullData = { ...data, ...baseData, ...dataMust };
     //
     const {
       validatedData,
@@ -329,20 +348,25 @@ export abstract class DataOperation<T> extends BaseMixins {
   protected async allCreateTableIfNotExistsBase() {
     const { secondaryIndexOptions } = this._getLocalVariables();
 
-    const existingTableInfo = await this.allGetTableInfoBase();
-    if (existingTableInfo) {
-      if (secondaryIndexOptions?.length) {
-        await this._allUpdateGlobalSecondaryIndexBase({
-          secondaryIndexOptions,
-          existingTableInfo,
-        });
-      } else if (existingTableInfo.GlobalSecondaryIndexes?.length) {
-        await this._allUpdateGlobalSecondaryIndexBase({
-          secondaryIndexOptions: [],
-          existingTableInfo,
-        });
+    try {
+      const existingTableInfo = await this.allGetTableInfoBase();
+      console.log({ existingTableInfo });
+      if (existingTableInfo) {
+        if (secondaryIndexOptions?.length) {
+          await this._allUpdateGlobalSecondaryIndexBase({
+            secondaryIndexOptions,
+            existingTableInfo,
+          });
+        } else if (existingTableInfo.GlobalSecondaryIndexes?.length) {
+          await this._allUpdateGlobalSecondaryIndexBase({
+            secondaryIndexOptions: [],
+            existingTableInfo,
+          });
+        }
+        return null;
       }
-      return null;
+    } catch (error) {
+      //
     }
     return await this.allCreateTableBase();
   }
@@ -454,7 +478,7 @@ export abstract class DataOperation<T> extends BaseMixins {
     const { sortKeyFieldName } = this._getLocalVariables();
 
     type IProject = {
-      [sortKeyFieldName]: string;
+      [n: string]: string;
     };
 
     const data = await this.allGetOneByIdProjectBase<IProject>({

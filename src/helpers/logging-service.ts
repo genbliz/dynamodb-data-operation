@@ -1,6 +1,6 @@
 class LoggingServiceBase {
   log(message?: any, ...optionalParams: any[]) {
-    console.log(message, optionalParams);
+    console.log(message);
   }
 }
 

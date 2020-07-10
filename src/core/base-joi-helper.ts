@@ -14,3 +14,32 @@ export function getJoiValidationErrors(
   }
   return "";
 }
+
+export function defaultISODateNowFunc() {
+  return new Date().toISOString();
+}
+
+export function dateISOValidation({
+  isRequired,
+  defaultVal,
+}: { isRequired?: boolean; defaultVal?: () => string | string } = {}) {
+  if (isRequired === true) {
+    if (defaultVal) {
+      return Joi.string()
+        .isoDate()
+        .required()
+        .strict(false)
+        .default(defaultVal);
+    }
+    return Joi.string().isoDate().required().strict(false);
+  }
+  if (defaultVal) {
+    return Joi.string().isoDate().strict(false).allow(null).default(defaultVal);
+  }
+  return Joi.string()
+    .isoDate()
+    .strict(false)
+    .empty("")
+    .allow(null)
+    .default(null);
+}

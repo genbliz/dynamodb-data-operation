@@ -3,8 +3,8 @@ import AWS, { DynamoDB } from "aws-sdk";
 import { DocumentClient } from "aws-sdk/clients/dynamodb";
 
 class DynamoConnectionBase {
-  private _dynamoDbClient!: DocumentClient;
-  private _dynamoDb!: DynamoDB;
+  private _dynamoDbClient: DocumentClient;
+  private _dynamoDb: DynamoDB;
 
   constructor() {
     const region = "us-west-2";

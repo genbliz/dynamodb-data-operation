@@ -2,7 +2,7 @@ import { LoggingService } from "../helpers/logging-service";
 import { UtilService } from "../helpers/util-service";
 import {
   IDynamoQueryConditionParams,
-  IDynamoScanParamOptions,
+  QueryDefinition,
 } from "../types/base-declarations";
 
 type FieldPartial<T> = { [P in keyof T]-?: any };
@@ -298,7 +298,7 @@ export abstract class DynamoFilterQueryOperation {
     queryDefs,
     projectionFields,
   }: {
-    queryDefs: IDynamoScanParamOptions<any>["query"];
+    queryDefs: QueryDefinition<any>["query"];
     projectionFields: any[] | undefined | null;
   }) {
     let queryAndConditions: IQueryConditions[] = [];
