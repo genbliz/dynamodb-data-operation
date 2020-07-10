@@ -2,6 +2,7 @@ import type {
   IDynamoQueryParamOptions,
   IDynamoQuerySecondaryParamOptions,
   ISecondaryIndexDef,
+  IFieldCondition,
 } from "../types";
 import { GenericDataError } from "./../helpers/errors";
 import { UtilService } from "../helpers/util-service";
@@ -21,15 +22,13 @@ interface IDynamoOptions<T> {
   dynamoDb: () => DynamoDB;
   schemaDef: Joi.SchemaMap;
   dynamoDbClient: () => DocumentClient;
+  dataKeyGenerator: () => string;
   featurePartitionValue: string;
   secondaryIndexOptions: ISecondaryIndexDef<T>[];
   baseTableName: string;
   strictRequiredFields: (keyof T)[] | string[];
 }
-
-function generateDynamoTableKey() {
-  return UtilService.generateDynamoTableKey();
-}
+// type IFieldCondition = { [field: string]: string | number };
 
 const getRandom = () =>
   [
@@ -49,6 +48,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
   //
   readonly #dynamoDbClient: () => DocumentClient;
   readonly #dynamoDb: () => DynamoDB;
+  readonly #dataKeyGenerator: () => string;
   readonly #schema: Joi.Schema;
   readonly #marshaller: Marshaller;
   readonly #tableFullName: string;
@@ -64,22 +64,18 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     featurePartitionValue,
     baseTableName,
     strictRequiredFields,
+    dataKeyGenerator,
   }: IDynamoOptions<T>) {
     super();
     this.#dynamoDb = dynamoDb;
     this.#dynamoDbClient = dynamoDbClient;
+    this.#dataKeyGenerator = dataKeyGenerator;
     this.#schema = createTenantSchema(schemaDef);
     this.#tableFullName = baseTableName;
     this.#marshaller = new Marshaller({ onEmpty: "omit" });
     this.#featurePartitionValue = featurePartitionValue;
     this.#secondaryIndexOptions = secondaryIndexOptions;
     this.#strictRequiredFields = strictRequiredFields as string[];
-
-    setTimeout(() => {
-      this.allCreateTableIfNotExistsBase().catch((error) => {
-        console.log(error);
-      });
-    }, 200);
   }
 
   private _dynamoDbClient(): DocumentClient {
@@ -91,7 +87,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
   }
 
   private generateDynamoTableKey() {
-    return generateDynamoTableKey();
+    return this.#dataKeyGenerator();
   }
 
   private _getLocalVariables() {
@@ -125,27 +121,29 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     }
   }
 
-  protected async allCreateOneBase({ data }: { data: T }) {
-    this._checkValidateMustBeAnObjectDataType(data);
+  private _checkValidateStrictRequiredFields(onDataObj: any) {
+    this._checkValidateMustBeAnObjectDataType(onDataObj);
 
-    const {
-      tableFullName,
-      sortKeyFieldName,
-      strictRequiredFields,
-    } = this._getLocalVariables();
+    const { strictRequiredFields } = this._getLocalVariables();
+
+    if (strictRequiredFields?.length) {
+      for (const field of strictRequiredFields) {
+        if (onDataObj[field] === null || onDataObj[field] === undefined) {
+          throw new GenericDataError(`Required field NOT defined`);
+        }
+      }
+    }
+  }
+
+  protected async allCreateOneBase({ data }: { data: T }) {
+    this._checkValidateStrictRequiredFields(data);
+
+    const { tableFullName, sortKeyFieldName } = this._getLocalVariables();
 
     let dataId: string | undefined = data[sortKeyFieldName];
 
     if (!dataId) {
       dataId = this.generateDynamoTableKey();
-    }
-
-    if (strictRequiredFields?.length) {
-      for (const field of strictRequiredFields) {
-        if (data[field] === null || data[field] === undefined) {
-          throw new GenericDataError(`Required field NOT defined`);
-        }
-      }
     }
 
     const baseData = {
@@ -170,7 +168,31 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     return result;
   }
 
-  protected async allGetOneByIdBase({ dataId }: { dataId: string }) {
+  private withConditionPassed({
+    item,
+    withCondition,
+  }: {
+    item: any;
+    withCondition?: IFieldCondition<T>;
+  }) {
+    if (item && withCondition && Object.keys(withCondition).length > 0) {
+      if (typeof withCondition === "object") {
+        const isPassed = Object.entries(withCondition).every(([key, val]) => {
+          return item[key] !== undefined && item[key] === val;
+        });
+        return isPassed;
+      }
+    }
+    return true;
+  }
+
+  protected async allGetOneByIdBase({
+    dataId,
+    withCondition,
+  }: {
+    dataId: string;
+    withCondition?: IFieldCondition<T>;
+  }): Promise<T | null> {
     const {
       partitionKeyFieldName,
       sortKeyFieldName,
@@ -190,18 +212,26 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
         [sortKeyFieldName]: dataId,
       },
     };
-    const _data = await this._dynamoDbClient().get(params).promise();
-    const data: T = _data.Item as any;
-    if (data) return data;
-    return null;
+    const result = await this._dynamoDbClient().get(params).promise();
+    const item = result.Item as any;
+    if (!item) {
+      return null;
+    }
+    const isPassed = this.withConditionPassed({ withCondition, item });
+    if (!isPassed) {
+      return null;
+    }
+    return item;
   }
 
   protected async allGetOneByIdProjectBase<TExpectedVals = T>({
     dataId,
     projectionAttributes,
+    withCondition,
   }: {
     dataId: string;
     projectionAttributes: (keyof TExpectedVals)[];
+    withCondition?: IFieldCondition<T>;
   }) {
     this.allHelpValidateRequiredString({ Get1DataId: dataId });
 
@@ -221,32 +251,27 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
       ProjectionExpression: projectionAttributes.join(", ").trim(),
     };
 
-    const _data = await this._dynamoDbClient().get(params).promise();
-    const data: TExpectedVals = _data.Item as any;
-    return data;
+    const result = await this._dynamoDbClient().get(params).promise();
+    const item = result.Item as any;
+    if (!item) {
+      return null;
+    }
+    const isPassed = this.withConditionPassed({ withCondition, item });
+    if (!isPassed) {
+      return null;
+    }
+    return item;
   }
 
   protected async allUpdateOneDirectBase({ data }: { data: T }) {
-    this._checkValidateMustBeAnObjectDataType(data);
+    this._checkValidateStrictRequiredFields(data);
 
-    const {
-      tableFullName,
-      sortKeyFieldName,
-      strictRequiredFields,
-    } = this._getLocalVariables();
+    const { tableFullName, sortKeyFieldName } = this._getLocalVariables();
 
     const dataId: string | undefined = data[sortKeyFieldName];
 
     if (!dataId) {
       throw new GenericDataError("Update data requires sort key field value");
-    }
-
-    if (strictRequiredFields?.length) {
-      for (const field of strictRequiredFields) {
-        if (data[field] === null || data[field] === undefined) {
-          throw new GenericDataError(`Required field NOT defined`);
-        }
-      }
     }
 
     const dataMust = this._getBaseObject({ dataId });
@@ -275,17 +300,15 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
   protected async allUpdateOneByIdBase({
     dataId,
     data,
+    withCondition,
   }: {
     dataId: string;
     data: T;
+    withCondition?: IFieldCondition<T>;
   }) {
-    this._checkValidateMustBeAnObjectDataType(data);
+    this._checkValidateStrictRequiredFields(data);
 
-    const {
-      tableFullName,
-      sortKeyFieldName,
-      strictRequiredFields,
-    } = this._getLocalVariables();
+    const { tableFullName, sortKeyFieldName } = this._getLocalVariables();
 
     this.allHelpValidateRequiredString({ Update1DataId: dataId });
 
@@ -295,12 +318,12 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
       throw new GenericDataError("Data does NOT exists");
     }
 
-    if (strictRequiredFields?.length) {
-      for (const field of strictRequiredFields) {
-        if (data[field] === null || data[field] === undefined) {
-          throw new GenericDataError(`Required field NOT defined`);
-        }
-      }
+    const isPassed = this.withConditionPassed({
+      withCondition,
+      item: dataInDb,
+    });
+    if (!isPassed) {
+      throw new GenericDataError("Update condition failed");
     }
 
     const dataMust = this._getBaseObject({
@@ -330,14 +353,15 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     });
 
     if (error) {
-      LoggingService.log({ "@JoiValidate": "", error, value });
-      return await Promise.reject(getJoiValidationErrors(error));
+      const msg = getJoiValidationErrors(error) ?? "Validation error occured";
+      throw new GenericDataError(msg);
     }
     const marshalledData = this.#marshaller.marshallItem(value);
-    return {
+
+    return await Promise.resolve({
       validatedData: value,
       marshalled: marshalledData,
-    };
+    });
   }
 
   //================================
@@ -405,25 +429,20 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
   protected async allCreateTableIfNotExistsBase() {
     const { secondaryIndexOptions } = this._getLocalVariables();
 
-    try {
-      const existingTableInfo = await this.allGetTableInfoBase();
-      console.log({ existingTableInfo });
-      if (existingTableInfo) {
-        if (secondaryIndexOptions?.length) {
-          await this._allUpdateGlobalSecondaryIndexBase({
-            secondaryIndexOptions,
-            existingTableInfo,
-          });
-        } else if (existingTableInfo.GlobalSecondaryIndexes?.length) {
-          await this._allUpdateGlobalSecondaryIndexBase({
-            secondaryIndexOptions: [],
-            existingTableInfo,
-          });
-        }
-        return null;
+    const existingTableInfo = await this.allGetTableInfoBase();
+    if (existingTableInfo) {
+      if (secondaryIndexOptions?.length) {
+        await this._allUpdateGlobalSecondaryIndexBase({
+          secondaryIndexOptions,
+          existingTableInfo,
+        });
+      } else if (existingTableInfo.GlobalSecondaryIndexes?.length) {
+        await this._allUpdateGlobalSecondaryIndexBase({
+          secondaryIndexOptions: [],
+          existingTableInfo,
+        });
       }
-    } catch (error) {
-      //
+      return null;
     }
     return await this.allCreateTableBase();
   }

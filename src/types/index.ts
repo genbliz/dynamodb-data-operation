@@ -80,6 +80,10 @@ export interface ISecondaryIndexDef<T> {
   projectionFieldsInclude?: (keyof T)[];
 }
 
+export type IFieldCondition<T> = {
+  [P in keyof T]: T[P] | string | number;
+};
+
 // export type ISecondaryIndexDefDictionary<T, TKeys> = {
 //   [P in keyof TKeys]: ISecondaryIndexDef<T>;
 // };
