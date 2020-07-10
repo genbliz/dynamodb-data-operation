@@ -52,7 +52,7 @@ export type IDynamoPagingParams = {
   orderDesc?: boolean;
 };
 
-export type QueryDefinition<T> = QueryPartialAll<Partial<T>> & {
+export type IQueryDefinition<T> = QueryPartialAll<Partial<T>> & {
   $or?: QueryPartialAll<Partial<T>>[];
 };
 
@@ -63,13 +63,13 @@ export type QueryDefinition<T> = QueryPartialAll<Partial<T>> & {
 // }
 
 export interface IDynamoQuerySecondaryParamOptions<T> {
-  query: QueryDefinition<T>;
+  query: IQueryDefinition<T>;
   fields?: (keyof T)[];
   pagingParams?: IDynamoPagingParams;
 }
 
 export interface IDynamoQueryParamOptions<T, ISortKeyObjField = any> {
-  query?: QueryDefinition<T>;
+  query?: IQueryDefinition<T>;
   fields?: (keyof T)[];
   partitionSortKeyQuery: {
     partitionKeyEquals: string;

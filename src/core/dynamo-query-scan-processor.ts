@@ -1,5 +1,5 @@
 import { DynamoDB, AWSError } from "aws-sdk";
-import { IDynamoPagingResult } from "../types/base-declarations";
+import type { IDynamoPagingResult } from "../types/base-declarations";
 import { MyDynamoConnection } from "../test/connection";
 
 export abstract class DynamoQueryScanProcessor {

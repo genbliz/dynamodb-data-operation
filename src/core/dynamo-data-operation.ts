@@ -1,4 +1,4 @@
-import {
+import type {
   IDynamoQueryParamOptions,
   IDynamoQuerySecondaryParamOptions,
 } from "./../types/base-declarations";
@@ -9,7 +9,7 @@ import { DynamoDB } from "aws-sdk";
 import { DocumentClient } from "aws-sdk/clients/dynamodb";
 import Joi from "@hapi/joi";
 import { Marshaller } from "@aws/dynamodb-auto-marshaller";
-import { ISecondaryIndexDef } from "../types/base-types";
+import type { ISecondaryIndexDef } from "../types/base-types";
 import { getJoiValidationErrors } from "../core/base-joi-helper";
 import BaseMixins from "../core/base-mixins";
 import { coreSchemaDefinition, ICoreEntityBaseModel } from "./base-schema";
