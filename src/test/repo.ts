@@ -29,7 +29,7 @@ class MyRepositoryBase extends BaseRepository<IPayment> {
     super({
       schemaSubDef,
       secondaryIndexOptions: [],
-      segmentPartitionValue: "table_users",
+      featurePartitionValue: "table_users",
     });
   }
 

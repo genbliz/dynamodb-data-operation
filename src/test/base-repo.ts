@@ -5,7 +5,7 @@ import Joi from "@hapi/joi";
 
 interface IBaseRepoOptions<T> {
   schemaSubDef: Joi.SchemaMap;
-  segmentPartitionValue: string;
+  featurePartitionValue: string;
   secondaryIndexOptions: ISecondaryIndexDef<T>[];
 }
 
@@ -13,7 +13,7 @@ export abstract class BaseRepository<T> extends DynamoDataOperation<T> {
   constructor({
     schemaSubDef,
     secondaryIndexOptions,
-    segmentPartitionValue,
+    featurePartitionValue,
   }: IBaseRepoOptions<T>) {
     super({
       dynamoDb: () => MyDynamoConnection.dynamoDbInst(),
@@ -21,7 +21,8 @@ export abstract class BaseRepository<T> extends DynamoDataOperation<T> {
       tableFullName: "hospiman_table_db1",
       schemaDef: { ...schemaSubDef },
       secondaryIndexOptions,
-      segmentPartitionValue,
+      featurePartitionValue,
+      strictRequiredFields: [],
     });
   }
 }
