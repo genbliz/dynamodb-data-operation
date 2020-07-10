@@ -18,7 +18,7 @@ export abstract class BaseRepository<T> extends DynamoDataOperation<T> {
     super({
       dynamoDb: () => MyDynamoConnection.dynamoDbInst(),
       dynamoDbClient: () => MyDynamoConnection.dynamoDbClientInst(),
-      tableFullName: "hospiman_table_db1",
+      baseTableName: "hospiman_table_db1",
       schemaDef: { ...schemaSubDef },
       secondaryIndexOptions,
       featurePartitionValue,

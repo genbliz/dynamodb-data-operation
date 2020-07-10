@@ -23,7 +23,7 @@ interface IDynamoOptions<T> {
   dynamoDbClient: () => DocumentClient;
   featurePartitionValue: string;
   secondaryIndexOptions: ISecondaryIndexDef<T>[];
-  tableFullName: string;
+  baseTableName: string;
   strictRequiredFields: (keyof T)[] | string[];
 }
 
@@ -62,14 +62,14 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     dynamoDbClient,
     secondaryIndexOptions,
     featurePartitionValue,
-    tableFullName,
+    baseTableName,
     strictRequiredFields,
   }: IDynamoOptions<T>) {
     super();
     this.#dynamoDb = dynamoDb;
     this.#dynamoDbClient = dynamoDbClient;
     this.#schema = createTenantSchema(schemaDef);
-    this.#tableFullName = tableFullName;
+    this.#tableFullName = baseTableName;
     this.#marshaller = new Marshaller({ onEmpty: "omit" });
     this.#featurePartitionValue = featurePartitionValue;
     this.#secondaryIndexOptions = secondaryIndexOptions;
@@ -119,7 +119,15 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     return dataMust;
   }
 
+  private _checkValidateMustBeAnObjectDataType(data: any) {
+    if (!data || typeof data !== "object") {
+      throw new GenericDataError(`Data MUST be valid object`);
+    }
+  }
+
   protected async allCreateOneBase({ data }: { data: T }) {
+    this._checkValidateMustBeAnObjectDataType(data);
+
     const {
       tableFullName,
       sortKeyFieldName,
@@ -219,6 +227,8 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
   }
 
   protected async allUpdateOneDirectBase({ data }: { data: T }) {
+    this._checkValidateMustBeAnObjectDataType(data);
+
     const {
       tableFullName,
       sortKeyFieldName,
@@ -269,6 +279,8 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     dataId: string;
     data: T;
   }) {
+    this._checkValidateMustBeAnObjectDataType(data);
+
     const {
       tableFullName,
       sortKeyFieldName,
