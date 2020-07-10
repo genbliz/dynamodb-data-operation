@@ -21,9 +21,10 @@ interface IDynamoOptions<T> {
   dynamoDb: () => DynamoDB;
   schemaDef: Joi.SchemaMap;
   dynamoDbClient: () => DocumentClient;
-  segmentPartitionValue: string;
+  featurePartitionValue: string;
   secondaryIndexOptions: ISecondaryIndexDef<T>[];
   tableFullName: string;
+  strictRequiredFields: (keyof T)[] | string[];
 }
 
 function generateDynamoTableKey() {
@@ -43,7 +44,7 @@ function createTenantSchema(schemaMapDef: Joi.SchemaMap) {
 }
 
 export abstract class DynamoDataOperation<T> extends BaseMixins {
-  readonly #partitionKeyFieldName: keyof IDynamoDataCoreEntityModel = "partitionSegment";
+  readonly #partitionKeyFieldName: keyof IDynamoDataCoreEntityModel = "featurePartition";
   readonly #sortKeyFieldName: keyof IDynamoDataCoreEntityModel = "id";
   //
   readonly #dynamoDbClient: () => DocumentClient;
@@ -51,7 +52,8 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
   readonly #schema: Joi.Schema;
   readonly #marshaller: Marshaller;
   readonly #tableFullName: string;
-  readonly #segmentPartitionValue: string;
+  readonly #strictRequiredFields: string[];
+  readonly #featurePartitionValue: string;
   readonly #secondaryIndexOptions: ISecondaryIndexDef<T>[];
 
   constructor({
@@ -59,8 +61,9 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     schemaDef,
     dynamoDbClient,
     secondaryIndexOptions,
-    segmentPartitionValue,
+    featurePartitionValue,
     tableFullName,
+    strictRequiredFields,
   }: IDynamoOptions<T>) {
     super();
     this.#dynamoDb = dynamoDb;
@@ -68,8 +71,9 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     this.#schema = createTenantSchema(schemaDef);
     this.#tableFullName = tableFullName;
     this.#marshaller = new Marshaller({ onEmpty: "omit" });
-    this.#segmentPartitionValue = segmentPartitionValue;
+    this.#featurePartitionValue = featurePartitionValue;
     this.#secondaryIndexOptions = secondaryIndexOptions;
+    this.#strictRequiredFields = strictRequiredFields as string[];
 
     setTimeout(() => {
       this.allCreateTableIfNotExistsBase().catch((error) => {
@@ -94,9 +98,10 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     return {
       partitionKeyFieldName: this.#partitionKeyFieldName,
       sortKeyFieldName: this.#sortKeyFieldName,
-      segmentPartitionValue: this.#segmentPartitionValue,
+      featurePartitionValue: this.#featurePartitionValue,
       tableFullName: this.#tableFullName,
       secondaryIndexOptions: this.#secondaryIndexOptions,
+      strictRequiredFields: this.#strictRequiredFields,
     } as const;
   }
 
@@ -104,23 +109,35 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     const {
       partitionKeyFieldName,
       sortKeyFieldName,
-      segmentPartitionValue,
+      featurePartitionValue,
     } = this._getLocalVariables();
 
     const dataMust = {
-      [partitionKeyFieldName]: segmentPartitionValue,
+      [partitionKeyFieldName]: featurePartitionValue,
       [sortKeyFieldName]: dataId,
     };
     return dataMust;
   }
 
   protected async allCreateOneBase({ data }: { data: T }) {
-    const { tableFullName, sortKeyFieldName } = this._getLocalVariables();
+    const {
+      tableFullName,
+      sortKeyFieldName,
+      strictRequiredFields,
+    } = this._getLocalVariables();
 
     let dataId: string | undefined = data[sortKeyFieldName];
 
     if (!dataId) {
       dataId = this.generateDynamoTableKey();
+    }
+
+    if (strictRequiredFields?.length) {
+      for (const field of strictRequiredFields) {
+        if (data[field] === null || data[field] === undefined) {
+          throw new GenericDataError(`Required field NOT defined`);
+        }
+      }
     }
 
     const baseData = {
@@ -149,19 +166,19 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     const {
       partitionKeyFieldName,
       sortKeyFieldName,
-      segmentPartitionValue,
+      featurePartitionValue,
       tableFullName,
     } = this._getLocalVariables();
 
     this.allHelpValidateRequiredString({
-      QueryGetOnePartitionKey: segmentPartitionValue,
+      QueryGetOnePartitionKey: featurePartitionValue,
       QueryGetOneSortKey: dataId,
     });
 
     const params: DocumentClient.GetItemInput = {
       TableName: tableFullName,
       Key: {
-        [partitionKeyFieldName]: segmentPartitionValue,
+        [partitionKeyFieldName]: featurePartitionValue,
         [sortKeyFieldName]: dataId,
       },
     };
@@ -183,14 +200,14 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     const {
       partitionKeyFieldName,
       sortKeyFieldName,
-      segmentPartitionValue,
+      featurePartitionValue,
       tableFullName,
     } = this._getLocalVariables();
 
     const params: DocumentClient.GetItemInput = {
       TableName: tableFullName,
       Key: {
-        [partitionKeyFieldName]: segmentPartitionValue,
+        [partitionKeyFieldName]: featurePartitionValue,
         [sortKeyFieldName]: dataId,
       },
       ProjectionExpression: projectionAttributes.join(", ").trim(),
@@ -202,12 +219,24 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
   }
 
   protected async allUpdateOneDirectBase({ data }: { data: T }) {
-    const { tableFullName, sortKeyFieldName } = this._getLocalVariables();
+    const {
+      tableFullName,
+      sortKeyFieldName,
+      strictRequiredFields,
+    } = this._getLocalVariables();
 
     const dataId: string | undefined = data[sortKeyFieldName];
 
     if (!dataId) {
       throw new GenericDataError("Update data requires sort key field value");
+    }
+
+    if (strictRequiredFields?.length) {
+      for (const field of strictRequiredFields) {
+        if (data[field] === null || data[field] === undefined) {
+          throw new GenericDataError(`Required field NOT defined`);
+        }
+      }
     }
 
     const dataMust = this._getBaseObject({ dataId });
@@ -240,13 +269,26 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     dataId: string;
     data: T;
   }) {
-    const { tableFullName, sortKeyFieldName } = this._getLocalVariables();
+    const {
+      tableFullName,
+      sortKeyFieldName,
+      strictRequiredFields,
+    } = this._getLocalVariables();
+
     this.allHelpValidateRequiredString({ Update1DataId: dataId });
 
     const dataInDb = await this.allGetOneByIdBase({ dataId });
 
     if (!(dataInDb && dataInDb[sortKeyFieldName])) {
       throw new GenericDataError("Data does NOT exists");
+    }
+
+    if (strictRequiredFields?.length) {
+      for (const field of strictRequiredFields) {
+        if (data[field] === null || data[field] === undefined) {
+          throw new GenericDataError(`Required field NOT defined`);
+        }
+      }
     }
 
     const dataMust = this._getBaseObject({
@@ -896,12 +938,12 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
         tableFullName,
         partitionKeyFieldName,
         sortKeyFieldName,
-        segmentPartitionValue,
+        featurePartitionValue,
       } = this._getLocalVariables();
 
       const getArray: DynamoDB.Key[] = dataIds.map((sortKeyValue) => {
         const params01 = {
-          [partitionKeyFieldName]: { S: segmentPartitionValue },
+          [partitionKeyFieldName]: { S: featurePartitionValue },
           [sortKeyFieldName]: { S: sortKeyValue },
         };
         return params01;
@@ -1073,7 +1115,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
       tableFullName,
       partitionKeyFieldName,
       sortKeyFieldName,
-      segmentPartitionValue,
+      featurePartitionValue,
     } = this._getLocalVariables();
 
     const dataExist = await this.allDeleteByIdBase({ dataId });
@@ -1085,7 +1127,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     const params: DocumentClient.DeleteItemInput = {
       TableName: tableFullName,
       Key: {
-        [partitionKeyFieldName]: segmentPartitionValue,
+        [partitionKeyFieldName]: featurePartitionValue,
         [sortKeyFieldName]: dataId,
       },
     };
@@ -1110,14 +1152,14 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
       tableFullName,
       partitionKeyFieldName,
       sortKeyFieldName,
-      segmentPartitionValue,
+      featurePartitionValue,
     } = this._getLocalVariables();
 
     const delArray = dataIds.map((sortKeyValue) => {
       const params01: DynamoDB.WriteRequest = {
         DeleteRequest: {
           Key: {
-            [partitionKeyFieldName]: { S: segmentPartitionValue },
+            [partitionKeyFieldName]: { S: featurePartitionValue },
             [sortKeyFieldName]: { S: sortKeyValue },
           },
         },
