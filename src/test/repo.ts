@@ -34,7 +34,8 @@ class MyRepositoryBase extends BaseRepository<IPayment> {
   }
 
   async create() {
-    await this.allCreateOneBase({
+    await this.allUpdateOneByIdBase({
+      dataId: "",
       data: {
         amount: getRandom(),
         category: getRandom().toString(),
@@ -42,6 +43,12 @@ class MyRepositoryBase extends BaseRepository<IPayment> {
         remark: getRandom().toString(),
         transactionId: getRandom().toString(),
       },
+      withCondition: [
+        {
+          field: "invoiceId",
+          value: "",
+        },
+      ],
     });
   }
 }
