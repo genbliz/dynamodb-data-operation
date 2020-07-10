@@ -23,6 +23,7 @@ export abstract class BaseRepository<T> extends DynamoDataOperation<T> {
       secondaryIndexOptions,
       featurePartitionValue,
       strictRequiredFields: [],
+      dataKeyGenerator: () => Date.now().toString(),
     });
   }
 }
