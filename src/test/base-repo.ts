@@ -21,7 +21,7 @@ export abstract class BaseRepository<T> extends DynamoDataOperation<T> {
       baseTableName: "hospiman_table_db1",
       schemaDef: { ...schemaSubDef },
       secondaryIndexOptions,
-      featurePartitionValue,
+      featureIdentityValue: featurePartitionValue,
       strictRequiredFields: [],
       dataKeyGenerator: () => Date.now().toString(),
     });

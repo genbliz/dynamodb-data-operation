@@ -22,6 +22,11 @@
     "baseUrl": "./",
     "rootDir": "./src/"
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "src/**/*.test.ts", "src/**/*.spec.ts"]
+  "include": ["./src/**/*"],
+  "exclude": [
+    "node_modules",
+    "./pkg/**/*",
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts"
+  ]
 }

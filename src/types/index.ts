@@ -29,15 +29,13 @@ type QueryPartialAll<T> = Pick<
   Exclude<keyof QueryPartialAllPre<T>, FieldKeyExclude>
 >;
 //
-type QueryPartialBasicPre<T> = {
+type QueryKeyConditionPre<T> = {
   [P in keyof T]: T[P] | IDynamoKeyConditionParams<T>;
 };
-type QueryPartialBasic<T> = Pick<
-  QueryPartialBasicPre<T>,
-  Exclude<keyof QueryPartialBasicPre<T>, FieldKeyExclude>
+type QueryKeyConditionBasic<T> = Pick<
+  QueryKeyConditionPre<T>,
+  Exclude<keyof QueryKeyConditionPre<T>, FieldKeyExclude>
 >;
-//
-// type FieldPartial<T> = { [P in keyof T]: 1 };
 //
 
 export interface IDynamoPagingResult<T> {
@@ -56,19 +54,38 @@ export type IQueryDefinition<T> = QueryPartialAll<Partial<T>> & {
   $or?: QueryPartialAll<Partial<T>>[];
 };
 
-export interface IDynamoQuerySecondaryParamOptions<T> {
-  query: IQueryDefinition<T>;
-  fields?: (keyof T)[];
-  pagingParams?: IDynamoPagingParams;
-}
-
 export interface IDynamoQueryParamOptions<T, ISortKeyObjField = any> {
   query?: IQueryDefinition<T>;
   fields?: (keyof T)[];
   partitionSortKeyQuery: {
     partitionKeyEquals: string;
-    sortKeyQuery?: QueryPartialBasic<Required<ISortKeyObjField>>;
+    sortKeyQuery?: QueryKeyConditionBasic<Required<ISortKeyObjField>>;
   };
+  pagingParams?: IDynamoPagingParams;
+}
+
+/*
+
+export interface IDynamoQuerySecondaryParamOptions<T> {
+  query: IQueryDefinition<T>;
+  fields?: (keyof T)[];
+  pagingParams?: IDynamoPagingParams;
+}
+{
+    partitionEquals: { keyFieldName: keyof T; value: string | number };
+    secondaryIndexName: string;
+    orderDesc?: boolean;
+    sortKeyQueryOptions?: IDynamoQuerySecondaryParamOptions<T>;
+  }
+
+*/
+
+export interface IDynamoQuerySecondayIndexOptions<T, ISortKeyObjField = any> {
+  indexName: string;
+  partitionQuery: { fieldName: keyof T; equals: string | number };
+  sortKeyQuery?: QueryKeyConditionBasic<Required<ISortKeyObjField>>;
+  otherQuery?: IQueryDefinition<T>;
+  fields?: (keyof T)[];
   pagingParams?: IDynamoPagingParams;
 }
 

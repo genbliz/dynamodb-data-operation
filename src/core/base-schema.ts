@@ -3,7 +3,7 @@ import { dateISOValidation } from "./base-joi-helper";
 
 export interface IDynamoDataCoreEntityModel {
   id: string;
-  featurePartition: string;
+  featureIdentity: string;
   //
   // tags?: string[];
   //
@@ -19,7 +19,7 @@ export interface IDynamoDataCoreEntityModel {
 
 export const coreSchemaDefinition = {
   id: Joi.string().required().min(3).max(100),
-  featurePartition: Joi.string().required().min(3).max(100),
+  featureIdentity: Joi.string().required().min(3).max(100),
   //
   lastModifierUserId: Joi.string().allow(null).empty("").default(null),
   lastModifiedDate: dateISOValidation(),

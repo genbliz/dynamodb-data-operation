@@ -1,12 +1,10 @@
 import type {
   IDynamoQueryParamOptions,
-  IDynamoQuerySecondaryParamOptions,
   ISecondaryIndexDef,
   IFieldCondition,
+  IDynamoQuerySecondayIndexOptions,
 } from "../types";
 import { GenericDataError } from "./../helpers/errors";
-import { UtilService } from "../helpers/util-service";
-import { LoggingService } from "../helpers/logging-service";
 import { DynamoDB } from "aws-sdk";
 import { DocumentClient } from "aws-sdk/clients/dynamodb";
 import Joi from "@hapi/joi";
@@ -17,34 +15,26 @@ import {
   coreSchemaDefinition,
   IDynamoDataCoreEntityModel,
 } from "./base-schema";
+import { DynamoManageTable } from "./dynamo-manage-table";
 
 interface IDynamoOptions<T> {
   dynamoDb: () => DynamoDB;
   schemaDef: Joi.SchemaMap;
   dynamoDbClient: () => DocumentClient;
   dataKeyGenerator: () => string;
-  featurePartitionValue: string;
+  featureIdentityValue: string;
   secondaryIndexOptions: ISecondaryIndexDef<T>[];
   baseTableName: string;
   strictRequiredFields: (keyof T)[] | string[];
 }
-// type IFieldCondition = { [field: string]: string | number };
-
-const getRandom = () =>
-  [
-    "rand",
-    Math.round(Math.random() * 99999),
-    Math.round(Math.random() * 88888),
-    Math.round(Math.random() * 99),
-  ].join("");
 
 function createTenantSchema(schemaMapDef: Joi.SchemaMap) {
   return Joi.object().keys(schemaMapDef).keys(coreSchemaDefinition);
 }
 
 export abstract class DynamoDataOperation<T> extends BaseMixins {
-  readonly #partitionKeyFieldName: keyof IDynamoDataCoreEntityModel = "featurePartition";
-  readonly #sortKeyFieldName: keyof IDynamoDataCoreEntityModel = "id";
+  readonly #partitionKeyFieldName: keyof IDynamoDataCoreEntityModel = "id";
+  readonly #sortKeyFieldName: keyof IDynamoDataCoreEntityModel = "featureIdentity";
   //
   readonly #dynamoDbClient: () => DocumentClient;
   readonly #dynamoDb: () => DynamoDB;
@@ -53,15 +43,17 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
   readonly #marshaller: Marshaller;
   readonly #tableFullName: string;
   readonly #strictRequiredFields: string[];
-  readonly #featurePartitionValue: string;
+  readonly #featureIdentityValue: string;
   readonly #secondaryIndexOptions: ISecondaryIndexDef<T>[];
+  //
+  #tableManager!: DynamoManageTable<T>;
 
   constructor({
     dynamoDb,
     schemaDef,
     dynamoDbClient,
     secondaryIndexOptions,
-    featurePartitionValue,
+    featureIdentityValue,
     baseTableName,
     strictRequiredFields,
     dataKeyGenerator,
@@ -73,9 +65,22 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     this.#schema = createTenantSchema(schemaDef);
     this.#tableFullName = baseTableName;
     this.#marshaller = new Marshaller({ onEmpty: "omit" });
-    this.#featurePartitionValue = featurePartitionValue;
+    this.#featureIdentityValue = featureIdentityValue;
     this.#secondaryIndexOptions = secondaryIndexOptions;
     this.#strictRequiredFields = strictRequiredFields as string[];
+  }
+
+  protected getTableManager() {
+    if (this.#tableManager === undefined) {
+      this.#tableManager = new DynamoManageTable<T>({
+        dynamoDb: this.#dynamoDb,
+        secondaryIndexOptions: this.#secondaryIndexOptions,
+        tableFullName: this.#tableFullName,
+        partitionKeyFieldName: this.#partitionKeyFieldName,
+        sortKeyFieldName: this.#sortKeyFieldName,
+      });
+    }
+    return this.#tableManager;
   }
 
   private _dynamoDbClient(): DocumentClient {
@@ -94,7 +99,9 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     return {
       partitionKeyFieldName: this.#partitionKeyFieldName,
       sortKeyFieldName: this.#sortKeyFieldName,
-      featurePartitionValue: this.#featurePartitionValue,
+      //
+      featureIdentityValue: this.#featureIdentityValue,
+      //
       tableFullName: this.#tableFullName,
       secondaryIndexOptions: this.#secondaryIndexOptions,
       strictRequiredFields: this.#strictRequiredFields,
@@ -105,12 +112,12 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     const {
       partitionKeyFieldName,
       sortKeyFieldName,
-      featurePartitionValue,
+      featureIdentityValue,
     } = this._getLocalVariables();
 
     const dataMust = {
-      [partitionKeyFieldName]: featurePartitionValue,
-      [sortKeyFieldName]: dataId,
+      [partitionKeyFieldName]: dataId,
+      [sortKeyFieldName]: featureIdentityValue,
     };
     return dataMust;
   }
@@ -138,9 +145,9 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
   protected async allCreateOneBase({ data }: { data: T }) {
     this._checkValidateStrictRequiredFields(data);
 
-    const { tableFullName, sortKeyFieldName } = this._getLocalVariables();
+    const { tableFullName, partitionKeyFieldName } = this._getLocalVariables();
 
-    let dataId: string | undefined = data[sortKeyFieldName];
+    let dataId: string | undefined = data[partitionKeyFieldName];
 
     if (!dataId) {
       dataId = this.generateDynamoTableKey();
@@ -194,20 +201,20 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     const {
       partitionKeyFieldName,
       sortKeyFieldName,
-      featurePartitionValue,
+      featureIdentityValue,
       tableFullName,
     } = this._getLocalVariables();
 
     this.allHelpValidateRequiredString({
-      QueryGetOnePartitionKey: featurePartitionValue,
-      QueryGetOneSortKey: dataId,
+      QueryGetOnePartitionKey: dataId,
+      QueryGetOneSortKey: featureIdentityValue,
     });
 
     const params: DocumentClient.GetItemInput = {
       TableName: tableFullName,
       Key: {
-        [partitionKeyFieldName]: featurePartitionValue,
-        [sortKeyFieldName]: dataId,
+        [partitionKeyFieldName]: dataId,
+        [sortKeyFieldName]: featureIdentityValue,
       },
     };
     const result = await this._dynamoDbClient().get(params).promise();
@@ -236,15 +243,15 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     const {
       partitionKeyFieldName,
       sortKeyFieldName,
-      featurePartitionValue,
+      featureIdentityValue,
       tableFullName,
     } = this._getLocalVariables();
 
     const params: DocumentClient.GetItemInput = {
       TableName: tableFullName,
       Key: {
-        [partitionKeyFieldName]: featurePartitionValue,
-        [sortKeyFieldName]: dataId,
+        [partitionKeyFieldName]: dataId,
+        [sortKeyFieldName]: featureIdentityValue,
       },
       ProjectionExpression: projectionAttributes.join(", ").trim(),
     };
@@ -264,9 +271,9 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
   protected async allUpdateOneDirectBase({ data }: { data: T }) {
     this._checkValidateStrictRequiredFields(data);
 
-    const { tableFullName, sortKeyFieldName } = this._getLocalVariables();
+    const { tableFullName, partitionKeyFieldName } = this._getLocalVariables();
 
-    const dataId: string | undefined = data[sortKeyFieldName];
+    const dataId: string | undefined = data[partitionKeyFieldName];
 
     if (!dataId) {
       throw new GenericDataError("Update data requires sort key field value");
@@ -306,13 +313,13 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
   }) {
     this._checkValidateStrictRequiredFields(data);
 
-    const { tableFullName, sortKeyFieldName } = this._getLocalVariables();
+    const { tableFullName, partitionKeyFieldName } = this._getLocalVariables();
 
     this.allHelpValidateRequiredString({ Update1DataId: dataId });
 
     const dataInDb = await this.allGetOneByIdBase({ dataId });
 
-    if (!(dataInDb && dataInDb[sortKeyFieldName])) {
+    if (!(dataInDb && dataInDb[partitionKeyFieldName])) {
       throw new GenericDataError("Data does NOT exists");
     }
 
@@ -325,7 +332,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     }
 
     const dataMust = this._getBaseObject({
-      dataId: dataInDb[sortKeyFieldName],
+      dataId: dataInDb[partitionKeyFieldName],
     });
 
     const fullData = { ...dataInDb, ...data, ...dataMust };
@@ -364,192 +371,10 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
 
   //================================
 
-  protected async allGetListOfTablesNamesOnlineBase() {
-    const params: DynamoDB.ListTablesInput = {
-      Limit: 99,
-    };
-    const listOfTables = await this._dynamoDb().listTables(params).promise();
-    return listOfTables?.TableNames;
-  }
-
-  protected async allTableSettingUpdateTTLBase({
-    attrName,
-    isEnabled,
-  }: {
-    attrName: keyof T;
-    isEnabled: boolean;
-  }) {
-    const { tableFullName } = this._getLocalVariables();
-
-    const params: DynamoDB.Types.UpdateTimeToLiveInput = {
-      TableName: tableFullName,
-      TimeToLiveSpecification: {
-        AttributeName: attrName as string,
-        Enabled: isEnabled,
-      },
-    };
-    const result = await this._dynamoDb().updateTimeToLive(params).promise();
-    if (result?.TimeToLiveSpecification) {
-      return result.TimeToLiveSpecification;
-    }
-    return null;
-  }
-
-  protected async allGetTableInfoBase() {
-    try {
-      const { tableFullName } = this._getLocalVariables();
-
-      const params: DynamoDB.DescribeTableInput = {
-        TableName: tableFullName,
-      };
-      const result = await this._dynamoDb().describeTable(params).promise();
-      if (result?.Table?.TableName === tableFullName) {
-        return result.Table;
-      }
-      return null;
-    } catch (error) {
-      LoggingService.log({ "@allGetTableInfoBase": "", error: error?.message });
-      return null;
-    }
-  }
-
-  protected async allCheckTableExistsBase() {
-    const result = await this.allGetTableInfoBase();
-    if (!result) {
-      return false;
-    }
-    if (result?.GlobalSecondaryIndexes) {
-      // console.log(JSON.stringify({ tableInfo: result }, null, 2));
-    }
-    return true;
-  }
-
-  protected async allCreateTableIfNotExistsBase() {
-    const { secondaryIndexOptions } = this._getLocalVariables();
-
-    const existingTableInfo = await this.allGetTableInfoBase();
-    if (existingTableInfo) {
-      if (secondaryIndexOptions?.length) {
-        await this._allUpdateGlobalSecondaryIndexBase({
-          secondaryIndexOptions,
-          existingTableInfo,
-        });
-      } else if (existingTableInfo.GlobalSecondaryIndexes?.length) {
-        await this._allUpdateGlobalSecondaryIndexBase({
-          secondaryIndexOptions: [],
-          existingTableInfo,
-        });
-      }
-      return null;
-    }
-    return await this.allCreateTableBase();
-  }
-
-  protected async allCreateTableBase() {
-    const {
-      partitionKeyFieldName,
-      sortKeyFieldName,
-      tableFullName,
-      secondaryIndexOptions,
-    } = this._getLocalVariables();
-
-    const params: DynamoDB.CreateTableInput = {
-      AttributeDefinitions: [
-        {
-          AttributeName: partitionKeyFieldName,
-          AttributeType: "S",
-        },
-        {
-          AttributeName: sortKeyFieldName,
-          AttributeType: "S",
-        },
-      ],
-      KeySchema: [
-        {
-          AttributeName: partitionKeyFieldName,
-          KeyType: "HASH",
-        },
-        {
-          AttributeName: sortKeyFieldName,
-          KeyType: "RANGE",
-        },
-      ],
-      BillingMode: "PAY_PER_REQUEST",
-      TableName: tableFullName,
-    };
-
-    params.Tags = [
-      {
-        Key: "tablePrefix",
-        Value: tableFullName,
-      },
-      {
-        Key: `DDBTableGroupKey-${tableFullName}`,
-        Value: tableFullName,
-      },
-    ];
-
-    if (secondaryIndexOptions?.length) {
-      const creationParams = this._getGlobalSecondaryIndexCreationParams(
-        secondaryIndexOptions
-      );
-      if (creationParams.xAttributeDefinitions?.length) {
-        const existAttrDefNames = params.AttributeDefinitions.map(
-          (def) => def.AttributeName
-        );
-        creationParams.xAttributeDefinitions.forEach((def) => {
-          const alreadyDefined = existAttrDefNames.includes(def.AttributeName);
-          if (!alreadyDefined) {
-            params.AttributeDefinitions.push(def);
-          }
-        });
-      }
-      params.GlobalSecondaryIndexes = [...creationParams.xGlobalSecondaryIndex];
-    }
-
-    LoggingService.log({
-      "@allCreateTableBase, table: ": tableFullName,
-    });
-
-    const result = await this._dynamoDb().createTable(params).promise();
-
-    if (result?.TableDescription) {
-      LoggingService.log(
-        [
-          `@allCreateTableBase,`,
-          `Created table: '${result?.TableDescription.TableName}'`,
-          new Date().toTimeString(),
-        ].join(" ")
-      );
-      return result.TableDescription;
-    }
-    return null;
-  }
-
-  protected async allDeleteGlobalSecondaryIndexBase(indexName: string) {
-    const { tableFullName } = this._getLocalVariables();
-
-    const params: DynamoDB.UpdateTableInput = {
-      TableName: tableFullName,
-      GlobalSecondaryIndexUpdates: [
-        {
-          Delete: {
-            IndexName: indexName,
-          },
-        },
-      ],
-    };
-    const result = await this._dynamoDb().updateTable(params).promise();
-    if (result?.TableDescription) {
-      return result.TableDescription;
-    }
-    return null;
-  }
-
   protected async allExistsByIdBase(dataId: string) {
     this.allHelpValidateRequiredString({ Exist1DataId: dataId });
 
-    const { sortKeyFieldName } = this._getLocalVariables();
+    const { partitionKeyFieldName } = this._getLocalVariables();
 
     type IProject = {
       [n: string]: string;
@@ -557,303 +382,34 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
 
     const data = await this.allGetOneByIdProjectBase<IProject>({
       dataId,
-      projectionAttributes: [sortKeyFieldName],
+      projectionAttributes: [partitionKeyFieldName],
     });
-    if (data && data[sortKeyFieldName]) {
+    if (data && data[partitionKeyFieldName]) {
       return true;
     }
     return false;
   }
 
-  private _getGlobalSecondaryIndexCreationParams(
-    secondaryIndexOptions: ISecondaryIndexDef<T>[]
-  ) {
-    const { tableFullName } = this._getLocalVariables();
-    const params: DynamoDB.CreateTableInput = {
-      KeySchema: [], //  make linter happy
-      AttributeDefinitions: [],
-      TableName: tableFullName,
-      GlobalSecondaryIndexes: [],
-    };
-
-    const attributeDefinitionsNameList: string[] = [];
-
-    secondaryIndexOptions.forEach((sIndex) => {
-      const {
-        indexName,
-        keyFieldName,
-        sortFieldName,
-        dataType,
-        projectionFieldsInclude,
-      } = sIndex;
-      //
-      const _keyFieldName = keyFieldName as string;
-      const _sortFieldName = sortFieldName as string;
-
-      if (!attributeDefinitionsNameList.includes(_keyFieldName)) {
-        attributeDefinitionsNameList.push(_keyFieldName);
-        params?.AttributeDefinitions?.push({
-          AttributeName: _keyFieldName,
-          AttributeType: dataType,
-        });
-      }
-
-      if (!attributeDefinitionsNameList.includes(_sortFieldName)) {
-        attributeDefinitionsNameList.push(_sortFieldName);
-        params?.AttributeDefinitions?.push({
-          AttributeName: _sortFieldName,
-          AttributeType: dataType,
-        });
-      }
-
-      let projectionFields = (projectionFieldsInclude || []) as string[];
-      let projectionType: AWS.DynamoDB.ProjectionType = "ALL";
-
-      if (projectionFields?.length) {
-        // remove frimary keys from include
-        projectionFields = projectionFields.filter((field) => {
-          return field !== _keyFieldName && field !== _sortFieldName;
-        });
-        if (projectionFields.length === 0) {
-          // only keys was projceted
-          projectionType = "KEYS_ONLY";
-        } else {
-          // only keys was projceted
-          projectionType = "INCLUDE";
-        }
-      }
-
-      params.GlobalSecondaryIndexes?.push({
-        IndexName: indexName,
-        Projection: {
-          ProjectionType: projectionType,
-          NonKeyAttributes:
-            projectionType === "INCLUDE" ? projectionFields : undefined,
-        },
-        KeySchema: [
-          {
-            AttributeName: _keyFieldName,
-            KeyType: "HASH",
-          },
-          {
-            AttributeName: _sortFieldName,
-            KeyType: "RANGE",
-          },
-        ],
-      });
-    });
-    return {
-      xAttributeDefinitions: params.AttributeDefinitions || [],
-      xGlobalSecondaryIndex: params.GlobalSecondaryIndexes || [],
-    };
-  }
-
-  private async _allUpdateGlobalSecondaryIndexBase({
-    secondaryIndexOptions,
-    existingTableInfo,
+  protected async allQueryGetManyByConditionBase({
+    paramOptions,
   }: {
-    secondaryIndexOptions: ISecondaryIndexDef<T>[];
-    existingTableInfo: DynamoDB.TableDescription;
-  }): Promise<DynamoDB.TableDescription[] | null> {
-    try {
-      const existingIndexNames: string[] = [];
-      const staledIndexNames: string[] = [];
-      const allIndexNames: string[] = [];
-      const newSecondaryIndexOptions: ISecondaryIndexDef<T>[] = [];
-
-      const updateResults: DynamoDB.TableDescription[] = [];
-
-      if (existingTableInfo?.GlobalSecondaryIndexes?.length) {
-        existingTableInfo?.GlobalSecondaryIndexes.forEach((indexInfo) => {
-          if (indexInfo.IndexName) {
-            existingIndexNames.push(indexInfo.IndexName);
-          }
-        });
-      }
-
-      secondaryIndexOptions?.forEach((newIndexInfo) => {
-        allIndexNames.push(newIndexInfo.indexName);
-        const indexExists = existingIndexNames.includes(newIndexInfo.indexName);
-        if (!indexExists) {
-          newSecondaryIndexOptions.push(newIndexInfo);
-        }
-      });
-
-      existingIndexNames.forEach((indexName) => {
-        const existsInList = allIndexNames.includes(indexName);
-        if (!existsInList) {
-          staledIndexNames.push(indexName);
-        }
-      });
-
-      if (!(newSecondaryIndexOptions.length || staledIndexNames.length)) {
-        return null;
-      }
-
-      let canUpdate = false;
-
-      const { tableFullName } = this._getLocalVariables();
-
-      LoggingService.log({
-        secondaryIndexOptions: secondaryIndexOptions.length,
-        newSecondaryIndexOptions: newSecondaryIndexOptions.length,
-        staledIndexNames: staledIndexNames.length,
-        tableName: tableFullName,
-      });
-
-      if (newSecondaryIndexOptions.length) {
-        canUpdate = true;
-        let indexCount = 0;
-        for (const indexOption of newSecondaryIndexOptions) {
-          const params: DynamoDB.UpdateTableInput = {
-            TableName: tableFullName,
-            GlobalSecondaryIndexUpdates: [],
-          };
-          indexCount++;
-
-          const creationParams = this._getGlobalSecondaryIndexCreationParams([
-            indexOption,
-          ]);
-
-          const indexName = creationParams.xGlobalSecondaryIndex[0].IndexName;
-
-          params.AttributeDefinitions = [
-            ...creationParams.xAttributeDefinitions,
-          ];
-
-          creationParams.xGlobalSecondaryIndex.forEach((gsi) => {
-            params.GlobalSecondaryIndexUpdates?.push({
-              Create: {
-                ...gsi,
-              },
-            });
-          });
-
-          const result = await this._dynamoDb().updateTable(params).promise();
-          if (result?.TableDescription) {
-            updateResults.push(result?.TableDescription);
-          }
-
-          LoggingService.log(
-            [
-              `Creating Index: '${indexName}'`,
-              `on table '${tableFullName}' started:`,
-              new Date().toTimeString(),
-            ].join(" ")
-          );
-
-          if (indexCount !== newSecondaryIndexOptions.length) {
-            const label = `Created Index '${indexName}'`;
-            console.time(label);
-            await UtilService.waitUntilMunites(5);
-            console.timeEnd(label);
-          }
-        }
-      }
-
-      if (staledIndexNames.length) {
-        if (canUpdate) {
-          await UtilService.waitUntilMunites(4);
-        }
-        canUpdate = true;
-        let indexCount = 0;
-
-        for (const indexName of staledIndexNames) {
-          const params: DynamoDB.UpdateTableInput = {
-            TableName: tableFullName,
-            GlobalSecondaryIndexUpdates: [],
-          };
-
-          indexCount++;
-
-          params.GlobalSecondaryIndexUpdates?.push({
-            Delete: {
-              IndexName: indexName,
-            },
-          });
-
-          const result = await this._dynamoDb().updateTable(params).promise();
-          if (result?.TableDescription) {
-            updateResults.push(result?.TableDescription);
-          }
-
-          LoggingService.log(
-            [
-              `Deleting Index: '${indexName}'`,
-              `on table '${tableFullName}' started:`,
-              new Date().toTimeString(),
-            ].join(" ")
-          );
-
-          if (indexCount !== staledIndexNames.length) {
-            const label = `Deleted Index '${indexName}'`;
-            console.time(label);
-            await UtilService.waitUntilMunites(1);
-            console.timeEnd(label);
-          }
-        }
-      }
-
-      if (!canUpdate) {
-        return null;
-      }
-
-      if (updateResults.length) {
-        console.log({
-          "@allCreateGlobalSecondaryIndexBase": "",
-          updateResults,
-        });
-        return updateResults;
-      }
-      return null;
-    } catch (error) {
-      LoggingService.log({
-        "@allCreateGlobalSecondaryIndexBase": "",
-        error: error?.message,
-      });
-      return null;
-    }
-  }
-
-  protected async allQueryBySecondaryIndexBase<T>({
-    keyQueryEquals: { keyFieldName, value },
-    secondaryIndexName,
-    orderDesc,
-    sortKeyQueryOptions,
-  }: {
-    keyQueryEquals: { keyFieldName: keyof T; value: string | number };
-    secondaryIndexName: string;
-    orderDesc?: boolean;
-    sortKeyQueryOptions?: IDynamoQuerySecondaryParamOptions<T>;
+    paramOptions: IDynamoQueryParamOptions<T>;
   }) {
-    const result = await this.allQueryBySecondaryIndexPaginateBase<T>({
-      keyQueryEquals: { keyFieldName, value },
-      secondaryIndexName,
-      orderDesc,
-      sortKeyQueryOptions,
-    });
-    if (result?.mainResult) {
-      return result.mainResult;
-    }
-    return [];
-  }
-
-  protected async allQueryGetManyByConditionBase(
-    paramOptions: IDynamoQueryParamOptions<T>
-  ) {
     paramOptions.pagingParams = undefined;
-    const result = await this.allQueryGetManyByConditionPaginateBase(
-      paramOptions
-    );
+    const result = await this.allQueryGetManyByConditionPaginateBase({
+      paramOptions,
+    });
     if (result?.mainResult?.length) {
       return result.mainResult;
     }
     return [];
   }
 
-  protected async allQueryGetManyByConditionPaginateBase(
-    paramOptions: IDynamoQueryParamOptions<T>
-  ) {
+  protected async allQueryGetManyByConditionPaginateBase({
+    paramOptions,
+  }: {
+    paramOptions: IDynamoQueryParamOptions<T>;
+  }) {
     const {
       tableFullName,
       sortKeyFieldName,
@@ -962,18 +518,27 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
         BatchGetSortKey: sortKeyValue,
       });
     });
+
+    const getRandom = () =>
+      [
+        "rand",
+        Math.round(Math.random() * 99999),
+        Math.round(Math.random() * 88888),
+        Math.round(Math.random() * 99),
+      ].join("");
+
     return new Promise<T[]>((resolve, reject) => {
       const {
         tableFullName,
         partitionKeyFieldName,
         sortKeyFieldName,
-        featurePartitionValue,
+        featureIdentityValue,
       } = this._getLocalVariables();
 
-      const getArray: DynamoDB.Key[] = dataIds.map((sortKeyValue) => {
+      const getArray: DynamoDB.Key[] = dataIds.map((dataId) => {
         const params01 = {
-          [partitionKeyFieldName]: { S: featurePartitionValue },
-          [sortKeyFieldName]: { S: sortKeyValue },
+          [partitionKeyFieldName]: { S: dataId },
+          [sortKeyFieldName]: { S: featureIdentityValue },
         };
         return params01;
       });
@@ -1050,45 +615,57 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     });
   }
 
-  protected async allQueryBySecondaryIndexPaginateBase<T>({
-    keyQueryEquals: { keyFieldName, value },
-    secondaryIndexName,
-    orderDesc,
-    sortKeyQueryOptions,
-  }: {
-    keyQueryEquals: { keyFieldName: keyof T; value: string | number };
-    secondaryIndexName: string;
-    orderDesc?: boolean;
-    sortKeyQueryOptions?: IDynamoQuerySecondaryParamOptions<T>;
-  }) {
+  protected async allQuerySecondaryIndexBase<T>(
+    paramOption: IDynamoQuerySecondayIndexOptions<T>
+  ) {
+    paramOption.pagingParams = undefined;
+    const result = await this.allQuerySecondaryIndexPaginateBase<T>(
+      paramOption
+    );
+    if (result?.mainResult) {
+      return result.mainResult;
+    }
+    return [];
+  }
+
+  protected async allQuerySecondaryIndexPaginateBase<T>(
+    paramOption: IDynamoQuerySecondayIndexOptions<T>
+  ) {
     const { tableFullName, secondaryIndexOptions } = this._getLocalVariables();
 
     if (!secondaryIndexOptions?.length) {
       throw new GenericDataError("Invalid secondary index definitions");
     }
 
-    const secondaryIndex = secondaryIndexOptions.find(({ indexName }) => {
-      return secondaryIndexName === indexName;
+    const {
+      indexName,
+      partitionQuery,
+      sortKeyQuery,
+      fields,
+      pagingParams,
+      otherQuery,
+    } = paramOption;
+
+    const secondaryIndex = secondaryIndexOptions.find((item) => {
+      return item.indexName === indexName;
     });
 
     if (!secondaryIndex) {
-      throw new GenericDataError("Invalid secondary index name");
+      throw new GenericDataError("Secondary index not named/defined");
     }
 
     const hasField =
-      (secondaryIndex.keyFieldName as string) === (keyFieldName as string);
+      (secondaryIndex.keyFieldName as string) ===
+      (partitionQuery.fieldName as string);
 
     if (!hasField) {
       throw new GenericDataError("Invalid secondary index field definitions");
     }
 
-    const paramOptions: IDynamoQuerySecondaryParamOptions<any> = {
-      query: {
-        ...(sortKeyQueryOptions?.query ?? {}),
-        ...{ [keyFieldName]: value },
-      },
-      fields: sortKeyQueryOptions?.fields,
-    };
+    const partitionSortKeyQuery = {
+      ...(sortKeyQuery ?? {}),
+      ...{ [partitionQuery.fieldName]: partitionQuery.equals },
+    } as const;
 
     const {
       expressionAttributeValues,
@@ -1096,20 +673,47 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
       projectionExpressionAttr,
       expressionAttributeNames,
     } = this.__helperDynamoFilterOperation({
-      queryDefs: paramOptions.query,
-      projectionFields: paramOptions.fields,
+      queryDefs: partitionSortKeyQuery,
+      projectionFields: fields ?? undefined,
     });
+
+    let otherFilterExpression: string | undefined = undefined;
+    let otherExpressionAttributeValues: any = undefined;
+    let otherExpressionAttributeNames: any = undefined;
+    if (otherQuery) {
+      const otherAttr = this.__helperDynamoFilterOperation({
+        queryDefs: otherQuery,
+        projectionFields: null,
+      });
+
+      otherExpressionAttributeValues = otherAttr.expressionAttributeValues;
+      otherExpressionAttributeNames = otherAttr.expressionAttributeNames;
+
+      if (
+        otherAttr?.filterExpression?.length &&
+        otherAttr?.filterExpression.length > 1
+      ) {
+        otherFilterExpression = otherAttr.filterExpression;
+      }
+    }
 
     const params: DocumentClient.QueryInput = {
       TableName: tableFullName,
-      IndexName: secondaryIndexName,
       KeyConditionExpression: filterExpression,
-      //
-      ExpressionAttributeValues: expressionAttributeValues,
-      ExpressionAttributeNames: expressionAttributeNames,
+      ExpressionAttributeValues: {
+        ...otherExpressionAttributeValues,
+        ...expressionAttributeValues,
+      },
+      FilterExpression: otherFilterExpression ?? undefined,
+      ExpressionAttributeNames: {
+        ...otherExpressionAttributeNames,
+        ...expressionAttributeNames,
+      },
     };
 
-    if (orderDesc === true) {
+    const orderDesc = pagingParams?.orderDesc === true;
+
+    if (orderDesc) {
       params.ScanIndexForward = false;
     }
 
@@ -1121,8 +725,6 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     const sortKeyName = secondaryIndex.sortFieldName as string;
 
     const hashKeyAndSortKey: [string, string] = [hashKeyName, sortKeyName];
-
-    const pagingParams = { ...paramOptions.pagingParams };
 
     const result = await this.__helperDynamoQueryProcessor<T>({
       params,
@@ -1144,20 +746,19 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
       tableFullName,
       partitionKeyFieldName,
       sortKeyFieldName,
-      featurePartitionValue,
     } = this._getLocalVariables();
 
     const dataExist = await this.allDeleteByIdBase({ dataId });
 
-    if (!(dataExist && dataExist[sortKeyFieldName])) {
+    if (!(dataExist && dataExist[partitionKeyFieldName])) {
       throw new GenericDataError("Record does NOT exists");
     }
 
     const params: DocumentClient.DeleteItemInput = {
       TableName: tableFullName,
       Key: {
-        [partitionKeyFieldName]: featurePartitionValue,
-        [sortKeyFieldName]: dataId,
+        [partitionKeyFieldName]: dataId,
+        [sortKeyFieldName]: sortKeyFieldName,
       },
     };
 
@@ -1181,15 +782,15 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
       tableFullName,
       partitionKeyFieldName,
       sortKeyFieldName,
-      featurePartitionValue,
+      featureIdentityValue,
     } = this._getLocalVariables();
 
-    const delArray = dataIds.map((sortKeyValue) => {
+    const delArray = dataIds.map((dataId) => {
       const params01: DynamoDB.WriteRequest = {
         DeleteRequest: {
           Key: {
-            [partitionKeyFieldName]: { S: featurePartitionValue },
-            [sortKeyFieldName]: { S: sortKeyValue },
+            [partitionKeyFieldName]: { S: dataId },
+            [sortKeyFieldName]: { S: featureIdentityValue },
           },
         },
       };
