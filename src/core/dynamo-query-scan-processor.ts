@@ -1,6 +1,6 @@
-import { DynamoDB, AWSError } from "aws-sdk";
+import type { DynamoDB, AWSError } from "aws-sdk";
 import type { IDynamoPagingResult } from "../types";
-import { MyDynamoConnection } from "../test/connection";
+import type { DocumentClient } from "aws-sdk/clients/dynamodb";
 
 export abstract class DynamoQueryScanProcessor {
   //
@@ -11,7 +11,9 @@ export abstract class DynamoQueryScanProcessor {
     lastKeyHash,
     orderDesc,
     hashKeyAndSortKey,
+    dynamoDbClient,
   }: {
+    dynamoDbClient: () => DocumentClient;
     evaluationLimit?: number;
     params: DynamoDB.QueryInput;
     pageSize?: number;
@@ -20,6 +22,7 @@ export abstract class DynamoQueryScanProcessor {
     hashKeyAndSortKey: [string, string];
   }) {
     return await this.__helperDynamoQueryScanProcessor<T>({
+      dynamoDbClient,
       operation: "query",
       evaluationLimit,
       params,
@@ -27,26 +30,6 @@ export abstract class DynamoQueryScanProcessor {
       lastKeyHash,
       orderDesc,
       hashKeyAndSortKey,
-    });
-  }
-
-  protected async __helperDynamoScanProcessor<T>({
-    evaluationLimit,
-    params,
-    pageSize,
-    lastKeyHash,
-  }: {
-    evaluationLimit?: number;
-    params: DynamoDB.ScanInput;
-    pageSize?: number;
-    lastKeyHash?: any;
-  }) {
-    return await this.__helperDynamoQueryScanProcessor<T>({
-      operation: "scan",
-      evaluationLimit,
-      params,
-      pageSize,
-      lastKeyHash,
     });
   }
 
@@ -58,7 +41,9 @@ export abstract class DynamoQueryScanProcessor {
     lastKeyHash,
     orderDesc,
     hashKeyAndSortKey,
+    dynamoDbClient,
   }: {
+    dynamoDbClient: () => DocumentClient;
     operation: "query" | "scan";
     evaluationLimit?: number;
     params: DynamoDB.QueryInput | DynamoDB.ScanInput;
@@ -148,10 +133,8 @@ export abstract class DynamoQueryScanProcessor {
               _paramsDef.Limit = _evaluationLimit;
             }
             console.log({ operation, dynamoProcessorParams: _paramsDef });
-            MyDynamoConnection.dynamoDbClientInst()[operation](
-              _paramsDef,
-              queryScanUntilDone
-            );
+
+            dynamoDbClient()[operation](_paramsDef, queryScanUntilDone);
           } else {
             resolve({ mainResult: returnedItems });
           }
@@ -172,10 +155,7 @@ export abstract class DynamoQueryScanProcessor {
         _params["ScanIndexForward"] = false;
       }
       console.log({ operation, dynamoProcessorParams: _params });
-      MyDynamoConnection.dynamoDbClientInst()[operation](
-        _params,
-        queryScanUntilDone
-      );
+      dynamoDbClient()[operation](_params, queryScanUntilDone);
     });
   }
 

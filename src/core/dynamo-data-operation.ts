@@ -5,8 +5,8 @@ import type {
   IDynamoQuerySecondayIndexOptions,
 } from "../types";
 import { GenericDataError } from "./../helpers/errors";
-import { DynamoDB } from "aws-sdk";
-import { DocumentClient } from "aws-sdk/clients/dynamodb";
+import type { DynamoDB } from "aws-sdk";
+import type { DocumentClient } from "aws-sdk/clients/dynamodb";
 import Joi from "@hapi/joi";
 import { Marshaller } from "@aws/dynamodb-auto-marshaller";
 import { getJoiValidationErrors } from "../core/base-joi-helper";
@@ -32,20 +32,21 @@ function createTenantSchema(schemaMapDef: Joi.SchemaMap) {
   return Joi.object().keys(schemaMapDef).keys(coreSchemaDefinition);
 }
 
+type IModelKeys = keyof IDynamoDataCoreEntityModel;
+
 export abstract class DynamoDataOperation<T> extends BaseMixins {
-  readonly here_partitionKeyFieldName: keyof IDynamoDataCoreEntityModel = "id";
-  readonly here_sortKeyFieldName: keyof IDynamoDataCoreEntityModel =
-    "featureIdentity";
+  private readonly here_partitionKeyFieldName: IModelKeys = "id";
+  private readonly here_sortKeyFieldName: IModelKeys = "featureIdentity";
   //
-  readonly here_dynamoDbClient: () => DocumentClient;
-  readonly here_dynamoDb: () => DynamoDB;
-  readonly here_dataKeyGenerator: () => string;
-  readonly here_schema: Joi.Schema;
-  readonly here_marshaller: Marshaller;
-  readonly here_tableFullName: string;
-  readonly here_strictRequiredFields: string[];
-  readonly here_featureIdentityValue: string;
-  readonly here_secondaryIndexOptions: ISecondaryIndexDef<T>[];
+  private readonly here_dynamoDbClient: () => DocumentClient;
+  private readonly here_dynamoDb: () => DynamoDB;
+  private readonly here_dataKeyGenerator: () => string;
+  private readonly here_schema: Joi.Schema;
+  private readonly here_marshaller: Marshaller;
+  private readonly here_tableFullName: string;
+  private readonly here_strictRequiredFields: string[];
+  private readonly here_featureIdentityValue: string;
+  private readonly here_secondaryIndexOptions: ISecondaryIndexDef<T>[];
   //
   // #tableManager!: DynamoManageTable<T>;
 
@@ -500,6 +501,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
 
     const paginationObjects = { ...paramOptions.pagingParams };
     const result = await this.__helperDynamoQueryProcessor<T>({
+      dynamoDbClient: () => this._dynamoDbClient(),
       params,
       hashKeyAndSortKey,
       ...paginationObjects,
@@ -728,6 +730,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     const hashKeyAndSortKey: [string, string] = [hashKeyName, sortKeyName];
 
     const result = await this.__helperDynamoQueryProcessor<T>({
+      dynamoDbClient: () => this._dynamoDbClient(),
       params,
       orderDesc,
       hashKeyAndSortKey,
