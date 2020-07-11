@@ -15,7 +15,7 @@ import {
   coreSchemaDefinition,
   IDynamoDataCoreEntityModel,
 } from "./base-schema";
-import { DynamoManageTable } from "./dynamo-manage-table";
+// import { DynamoManageTable } from "./dynamo-manage-table";
 
 interface IDynamoOptions<T> {
   dynamoDb: () => DynamoDB;
@@ -46,7 +46,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
   readonly #featureIdentityValue: string;
   readonly #secondaryIndexOptions: ISecondaryIndexDef<T>[];
   //
-  #tableManager!: DynamoManageTable<T>;
+  // #tableManager!: DynamoManageTable<T>;
 
   constructor({
     dynamoDb,
@@ -70,18 +70,18 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     this.#strictRequiredFields = strictRequiredFields as string[];
   }
 
-  protected getTableManager() {
-    if (this.#tableManager === undefined) {
-      this.#tableManager = new DynamoManageTable<T>({
-        dynamoDb: this.#dynamoDb,
-        secondaryIndexOptions: this.#secondaryIndexOptions,
-        tableFullName: this.#tableFullName,
-        partitionKeyFieldName: this.#partitionKeyFieldName,
-        sortKeyFieldName: this.#sortKeyFieldName,
-      });
-    }
-    return this.#tableManager;
-  }
+  // protected getTableManager() {
+  //   if (this.#tableManager === undefined) {
+  //     this.#tableManager = new DynamoManageTable<T>({
+  //       dynamoDb: this.#dynamoDb,
+  //       secondaryIndexOptions: this.#secondaryIndexOptions,
+  //       tableFullName: this.#tableFullName,
+  //       partitionKeyFieldName: this.#partitionKeyFieldName,
+  //       sortKeyFieldName: this.#sortKeyFieldName,
+  //     });
+  //   }
+  //   return this.#tableManager;
+  // }
 
   private _dynamoDbClient(): DocumentClient {
     return this.#dynamoDbClient();
