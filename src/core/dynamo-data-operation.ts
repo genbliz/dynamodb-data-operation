@@ -631,8 +631,8 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     return [];
   }
 
-  protected async allQuerySecondaryIndexPaginateBase<T>(
-    paramOption: IDynamoQuerySecondayIndexOptions<T>
+  protected async allQuerySecondaryIndexPaginateBase<TData = T>(
+    paramOption: IDynamoQuerySecondayIndexOptions<TData>
   ) {
     const { tableFullName, secondaryIndexOptions } = this._getLocalVariables();
 
