@@ -33,18 +33,19 @@ function createTenantSchema(schemaMapDef: Joi.SchemaMap) {
 }
 
 export abstract class DynamoDataOperation<T> extends BaseMixins {
-  readonly #partitionKeyFieldName: keyof IDynamoDataCoreEntityModel = "id";
-  readonly #sortKeyFieldName: keyof IDynamoDataCoreEntityModel = "featureIdentity";
+  readonly here_partitionKeyFieldName: keyof IDynamoDataCoreEntityModel = "id";
+  readonly here_sortKeyFieldName: keyof IDynamoDataCoreEntityModel =
+    "featureIdentity";
   //
-  readonly #dynamoDbClient: () => DocumentClient;
-  readonly #dynamoDb: () => DynamoDB;
-  readonly #dataKeyGenerator: () => string;
-  readonly #schema: Joi.Schema;
-  readonly #marshaller: Marshaller;
-  readonly #tableFullName: string;
-  readonly #strictRequiredFields: string[];
-  readonly #featureIdentityValue: string;
-  readonly #secondaryIndexOptions: ISecondaryIndexDef<T>[];
+  readonly here_dynamoDbClient: () => DocumentClient;
+  readonly here_dynamoDb: () => DynamoDB;
+  readonly here_dataKeyGenerator: () => string;
+  readonly here_schema: Joi.Schema;
+  readonly here_marshaller: Marshaller;
+  readonly here_tableFullName: string;
+  readonly here_strictRequiredFields: string[];
+  readonly here_featureIdentityValue: string;
+  readonly here_secondaryIndexOptions: ISecondaryIndexDef<T>[];
   //
   // #tableManager!: DynamoManageTable<T>;
 
@@ -59,15 +60,15 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     dataKeyGenerator,
   }: IDynamoOptions<T>) {
     super();
-    this.#dynamoDb = dynamoDb;
-    this.#dynamoDbClient = dynamoDbClient;
-    this.#dataKeyGenerator = dataKeyGenerator;
-    this.#schema = createTenantSchema(schemaDef);
-    this.#tableFullName = baseTableName;
-    this.#marshaller = new Marshaller({ onEmpty: "omit" });
-    this.#featureIdentityValue = featureIdentityValue;
-    this.#secondaryIndexOptions = secondaryIndexOptions;
-    this.#strictRequiredFields = strictRequiredFields as string[];
+    this.here_dynamoDb = dynamoDb;
+    this.here_dynamoDbClient = dynamoDbClient;
+    this.here_dataKeyGenerator = dataKeyGenerator;
+    this.here_schema = createTenantSchema(schemaDef);
+    this.here_tableFullName = baseTableName;
+    this.here_marshaller = new Marshaller({ onEmpty: "omit" });
+    this.here_featureIdentityValue = featureIdentityValue;
+    this.here_secondaryIndexOptions = secondaryIndexOptions;
+    this.here_strictRequiredFields = strictRequiredFields as string[];
   }
 
   // protected getTableManager() {
@@ -84,27 +85,27 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
   // }
 
   private _dynamoDbClient(): DocumentClient {
-    return this.#dynamoDbClient();
+    return this.here_dynamoDbClient();
   }
 
   private _dynamoDb(): DynamoDB {
-    return this.#dynamoDb();
+    return this.here_dynamoDb();
   }
 
   private generateDynamoTableKey() {
-    return this.#dataKeyGenerator();
+    return this.here_dataKeyGenerator();
   }
 
   private _getLocalVariables() {
     return {
-      partitionKeyFieldName: this.#partitionKeyFieldName,
-      sortKeyFieldName: this.#sortKeyFieldName,
+      partitionKeyFieldName: this.here_partitionKeyFieldName,
+      sortKeyFieldName: this.here_sortKeyFieldName,
       //
-      featureIdentityValue: this.#featureIdentityValue,
+      featureIdentityValue: this.here_featureIdentityValue,
       //
-      tableFullName: this.#tableFullName,
-      secondaryIndexOptions: this.#secondaryIndexOptions,
-      strictRequiredFields: this.#strictRequiredFields,
+      tableFullName: this.here_tableFullName,
+      secondaryIndexOptions: this.here_secondaryIndexOptions,
+      strictRequiredFields: this.here_strictRequiredFields,
     } as const;
   }
 
@@ -353,7 +354,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
   }
 
   private async _allHelpValidateMarshallAndGetValue(data: any) {
-    const { error, value } = this.#schema.validate(data, {
+    const { error, value } = this.here_schema.validate(data, {
       stripUnknown: true,
     });
 
@@ -361,7 +362,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
       const msg = getJoiValidationErrors(error) ?? "Validation error occured";
       throw new GenericDataError(msg);
     }
-    const marshalledData = this.#marshaller.marshallItem(value);
+    const marshalledData = this.here_marshaller.marshallItem(value);
 
     return await Promise.resolve({
       validatedData: value,
@@ -596,7 +597,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
           if (data?.Responses) {
             const itemListRaw = data.Responses[tableFullName];
             const itemList = itemListRaw.map((item) => {
-              return this.#marshaller.unmarshallItem(item);
+              return this.here_marshaller.unmarshallItem(item);
             });
             returnedItems = [...returnedItems, ...itemList];
           }

@@ -1,4 +1,4 @@
-import { ISecondaryIndexDef } from "../../pkg/dist-types/types";
+import { ISecondaryIndexDef } from "../types";
 import { UtilService } from "../helpers/util-service";
 import { LoggingService } from "../helpers/logging-service";
 import { DynamoDB } from "aws-sdk";
