@@ -618,11 +618,11 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     });
   }
 
-  protected async allQuerySecondaryIndexBase<T>(
-    paramOption: IDynamoQuerySecondayIndexOptions<T>
+  protected async allQuerySecondaryIndexBase<TData = T>(
+    paramOption: IDynamoQuerySecondayIndexOptions<TData>
   ) {
     paramOption.pagingParams = undefined;
-    const result = await this.allQuerySecondaryIndexPaginateBase<T>(
+    const result = await this.allQuerySecondaryIndexPaginateBase<TData>(
       paramOption
     );
     if (result?.mainResult) {
