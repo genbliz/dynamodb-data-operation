@@ -657,18 +657,15 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
       throw new GenericDataError("Secondary index not named/defined");
     }
 
-    const hasField =
-      (secondaryIndex.keyFieldName as string) ===
-      (partitionQuery.fieldName as string);
+    const keyFieldName = secondaryIndex.keyFieldName as string;
+    const sortFieldName = secondaryIndex.sortFieldName as string;
 
-    if (!hasField) {
-      throw new GenericDataError("Invalid secondary index field definitions");
-    }
-
-    const partitionSortKeyQuery = {
-      ...(sortKeyQuery ?? {}),
-      ...{ [partitionQuery.fieldName]: partitionQuery.equals },
-    } as const;
+    const partitionSortKeyQuery = sortKeyQuery
+      ? {
+          ...{ [sortFieldName]: sortKeyQuery },
+          ...{ [keyFieldName]: partitionQuery.equals },
+        }
+      : { [keyFieldName]: partitionQuery.equals };
 
     const {
       expressionAttributeValues,

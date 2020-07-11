@@ -80,10 +80,10 @@ export interface IDynamoQuerySecondaryParamOptions<T> {
 
 */
 
-export interface IDynamoQuerySecondayIndexOptions<T, ISortKeyObjField = any> {
+export interface IDynamoQuerySecondayIndexOptions<T, ISortKeyObjField = T> {
   indexName: string;
-  partitionQuery: { fieldName: keyof T; equals: string | number };
-  sortKeyQuery?: QueryKeyConditionBasic<Required<ISortKeyObjField>>;
+  partitionQuery: { equals: string | number };
+  sortKeyQuery?: IDynamoKeyConditionParams<T>;
   otherQuery?: IQueryDefinition<T>;
   fields?: (keyof T)[];
   pagingParams?: IDynamoPagingParams;
