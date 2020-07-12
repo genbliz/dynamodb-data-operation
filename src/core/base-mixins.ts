@@ -1,4 +1,4 @@
-import { GenericDataError } from "../helpers/errors";
+import { GenericDataError, GenericFriendlyError } from "../helpers/errors";
 import { DynamoFilterQueryOperation } from "./dynamo-filter-query-operation";
 import { DynamoQueryScanProcessor } from "./dynamo-query-scan-processor";
 
@@ -36,6 +36,10 @@ export abstract class DynamoFilterQueryMixin {
     }
   }
 
+  protected allHelpCreateFriendlyError(message: string, statusCode?: number) {
+    return new GenericFriendlyError(message);
+  }
+
   protected allHelpValidateRequiredString(keyValueValidates: {
     [key: string]: string;
   }) {
@@ -50,6 +54,7 @@ export abstract class DynamoFilterQueryMixin {
     }
   }
 }
+
 applyMixins(DynamoFilterQueryMixin, [
   //
   DynamoFilterQueryOperation,

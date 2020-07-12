@@ -7,6 +7,7 @@ export {
   IDynamoPagingParams,
   IDynamoQueryConditionParams,
   IDynamoPagingResult,
+  IQueryDefinition,
 } from "./types";
 export { IDynamoDataCoreEntityModel } from "./core/base-schema";
 export { GenericDataError } from "./helpers/errors";
