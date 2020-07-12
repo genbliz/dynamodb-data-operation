@@ -34,7 +34,7 @@ function createTenantSchema(schemaMapDef: Joi.SchemaMap) {
 
 type IModelKeys = keyof IDynamoDataCoreEntityModel;
 
-export abstract class DynamoDataOperation<T> extends BaseMixins {
+export default abstract class DynamoDataOperation<T> extends BaseMixins {
   private readonly here_partitionKeyFieldName: IModelKeys = "id";
   private readonly here_sortKeyFieldName: IModelKeys = "featureIdentity";
   //

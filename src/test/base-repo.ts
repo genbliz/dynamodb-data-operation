@@ -1,5 +1,5 @@
 import { ISecondaryIndexDef } from "../types";
-import { DynamoDataOperation } from "../core/dynamo-data-operation";
+import DynamoDataOpr from "../core/dynamo-data-operation";
 import { MyDynamoConnection } from "../test/connection";
 import Joi from "@hapi/joi";
 
@@ -9,7 +9,7 @@ interface IBaseRepoOptions<T> {
   secondaryIndexOptions: ISecondaryIndexDef<T>[];
 }
 
-export abstract class BaseRepository<T> extends DynamoDataOperation<T> {
+export abstract class BaseRepository<T> extends DynamoDataOpr<T> {
   constructor({
     schemaSubDef,
     secondaryIndexOptions,
