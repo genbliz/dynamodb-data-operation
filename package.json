@@ -1,6 +1,6 @@
 {
   "name": "dynamodb-data-operation",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "Dynamodb Operation",
   "esnext": "dist-src/index.js",
   "main": "dist-node/index.js",
