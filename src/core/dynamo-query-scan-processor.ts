@@ -46,7 +46,7 @@ export abstract class DynamoQueryScanProcessor {
     dynamoDbClient: () => DocumentClient;
     operation: "query" | "scan";
     evaluationLimit?: number;
-    params: DynamoDB.QueryInput | DynamoDB.ScanInput;
+    params: DynamoDB.QueryInput;
     pageSize?: number;
     lastKeyHash?: any;
     orderDesc?: boolean;
@@ -59,13 +59,14 @@ export abstract class DynamoQueryScanProcessor {
     type IResult = DynamoDB.QueryOutput | DynamoDB.ScanOutput;
 
     console.log({
-      processorParams: {
+      processorParamsInit: {
         operation,
         pageSize,
         orderDesc,
         lastKeyHash,
         evaluationLimit,
         hashKeyAndSortKey,
+        params,
       },
     });
 

@@ -651,15 +651,15 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       throw new GenericDataError("Secondary index not named/defined");
     }
 
-    const keyFieldName = secondaryIndex.keyFieldName as string;
-    const sortFieldName = secondaryIndex.sortFieldName as string;
+    const partitionKeyFieldName = secondaryIndex.keyFieldName as string;
+    const sortKeyFieldName = secondaryIndex.sortFieldName as string;
 
     const partitionSortKeyQuery = sortKeyQuery
       ? {
-          ...{ [sortFieldName]: sortKeyQuery },
-          ...{ [keyFieldName]: partitionKeyQuery.equals },
+          ...{ [sortKeyFieldName]: sortKeyQuery },
+          ...{ [partitionKeyFieldName]: partitionKeyQuery.equals },
         }
-      : { [keyFieldName]: partitionKeyQuery.equals };
+      : { [partitionKeyFieldName]: partitionKeyQuery.equals };
 
     const {
       expressionAttributeValues,
@@ -693,6 +693,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
 
     const params: DocumentClient.QueryInput = {
       TableName: tableFullName,
+      IndexName: indexName,
       KeyConditionExpression: filterExpression,
       ExpressionAttributeValues: {
         ...otherExpressionAttributeValues,
@@ -715,10 +716,10 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       params.ProjectionExpression = projectionExpressionAttr;
     }
 
-    const hashKeyName = secondaryIndex.keyFieldName as string;
-    const sortKeyName = secondaryIndex.sortFieldName as string;
-
-    const hashKeyAndSortKey: [string, string] = [hashKeyName, sortKeyName];
+    const hashKeyAndSortKey: [string, string] = [
+      partitionKeyFieldName,
+      sortKeyFieldName,
+    ];
 
     const result = await this.__helperDynamoQueryProcessor<T>({
       dynamoDbClient: () => this._dynamoDbClient(),
