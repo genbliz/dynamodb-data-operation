@@ -57,10 +57,8 @@ export type IQueryDefinition<T> = QueryPartialAll<Partial<T>> & {
 export interface IDynamoQueryParamOptions<T, ISortKeyObjField = any> {
   query?: IQueryDefinition<T>;
   fields?: (keyof T)[];
-  partitionSortKeyQuery: {
-    partitionKeyEquals: string;
-    sortKeyQuery?: QueryKeyConditionBasic<Required<ISortKeyObjField>>;
-  };
+  partitionKeyQuery: { equals: string | number };
+  sortKeyQuery?: QueryKeyConditionBasic<Required<ISortKeyObjField>>;
   pagingParams?: IDynamoPagingParams;
 }
 
@@ -82,9 +80,9 @@ export interface IDynamoQuerySecondaryParamOptions<T> {
 
 export interface IDynamoQuerySecondayIndexOptions<T, ISortKeyObjField = T> {
   indexName: string;
-  partitionQuery: { equals: string | number };
+  partitionKeyQuery: { equals: string | number };
   sortKeyQuery?: IDynamoKeyConditionParams<T>;
-  otherQuery?: IQueryDefinition<T>;
+  query?: IQueryDefinition<T>;
   fields?: (keyof T)[];
   pagingParams?: IDynamoPagingParams;
 }

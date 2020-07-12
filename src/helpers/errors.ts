@@ -3,3 +3,9 @@ export class GenericDataError extends Error {
     super(message);
   }
 }
+
+export class GenericFriendlyError extends Error {
+  constructor(message: string) {
+    super(message);
+  }
+}

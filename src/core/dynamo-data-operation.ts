@@ -392,33 +392,29 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     return false;
   }
 
-  protected async allQueryGetManyByConditionBase({
-    paramOptions,
-  }: {
-    paramOptions: IDynamoQueryParamOptions<T>;
-  }) {
+  protected async allQueryGetManyByConditionBase(
+    paramOptions: IDynamoQueryParamOptions<T>
+  ) {
     paramOptions.pagingParams = undefined;
-    const result = await this.allQueryGetManyByConditionPaginateBase({
-      paramOptions,
-    });
+    const result = await this.allQueryGetManyByConditionPaginateBase(
+      paramOptions
+    );
     if (result?.mainResult?.length) {
       return result.mainResult;
     }
     return [];
   }
 
-  protected async allQueryGetManyByConditionPaginateBase({
-    paramOptions,
-  }: {
-    paramOptions: IDynamoQueryParamOptions<T>;
-  }) {
+  protected async allQueryGetManyByConditionPaginateBase(
+    paramOptions: IDynamoQueryParamOptions<T>
+  ) {
     const {
       tableFullName,
       sortKeyFieldName,
       partitionKeyFieldName,
     } = this._getLocalVariables();
     //
-    if (!paramOptions?.partitionSortKeyQuery?.partitionKeyEquals) {
+    if (!paramOptions?.partitionKeyQuery?.equals === undefined) {
       throw new GenericDataError("Invalid Hash key value");
     }
     if (!sortKeyFieldName) {
@@ -427,7 +423,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
 
     let sortKeyQuery: any = {};
 
-    const sortKeyQueryData = paramOptions.partitionSortKeyQuery.sortKeyQuery;
+    const sortKeyQueryData = paramOptions.sortKeyQuery;
     if (sortKeyQueryData) {
       if (sortKeyQueryData[sortKeyFieldName]) {
         sortKeyQuery = {
@@ -442,8 +438,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
       queryDefs: {
         ...sortKeyQuery,
         ...{
-          [partitionKeyFieldName]:
-            paramOptions.partitionSortKeyQuery.partitionKeyEquals,
+          [partitionKeyFieldName]: paramOptions.partitionKeyQuery.equals,
         },
       },
       projectionFields: paramOptions?.fields ?? undefined,
@@ -454,21 +449,20 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     let otherExpressionAttributeValues: any = undefined;
     let otherExpressionAttributeNames: any = undefined;
     if (paramOptions?.query) {
-      const filterOtherAttributes = this.__helperDynamoFilterOperation({
+      const filterOtherAttr = this.__helperDynamoFilterOperation({
         queryDefs: paramOptions.query,
         projectionFields: null,
       });
 
       otherExpressionAttributeValues =
-        filterOtherAttributes.expressionAttributeValues;
-      otherExpressionAttributeNames =
-        filterOtherAttributes.expressionAttributeNames;
+        filterOtherAttr.expressionAttributeValues;
+      otherExpressionAttributeNames = filterOtherAttr.expressionAttributeNames;
 
       if (
-        filterOtherAttributes?.filterExpression &&
-        filterOtherAttributes?.filterExpression.length > 1
+        filterOtherAttr?.filterExpression &&
+        filterOtherAttr?.filterExpression.length > 1
       ) {
-        otherFilterExpression = filterOtherAttributes.filterExpression;
+        otherFilterExpression = filterOtherAttr.filterExpression;
       }
     }
 
@@ -642,11 +636,11 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
 
     const {
       indexName,
-      partitionQuery,
+      partitionKeyQuery,
       sortKeyQuery,
       fields,
       pagingParams,
-      otherQuery,
+      query,
     } = paramOption;
 
     const secondaryIndex = secondaryIndexOptions.find((item) => {
@@ -663,9 +657,9 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     const partitionSortKeyQuery = sortKeyQuery
       ? {
           ...{ [sortFieldName]: sortKeyQuery },
-          ...{ [keyFieldName]: partitionQuery.equals },
+          ...{ [keyFieldName]: partitionKeyQuery.equals },
         }
-      : { [keyFieldName]: partitionQuery.equals };
+      : { [keyFieldName]: partitionKeyQuery.equals };
 
     const {
       expressionAttributeValues,
@@ -680,9 +674,9 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
     let otherFilterExpression: string | undefined = undefined;
     let otherExpressionAttributeValues: any = undefined;
     let otherExpressionAttributeNames: any = undefined;
-    if (otherQuery) {
+    if (query) {
       const otherAttr = this.__helperDynamoFilterOperation({
-        queryDefs: otherQuery,
+        queryDefs: query,
         projectionFields: null,
       });
 
@@ -738,8 +732,10 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
 
   protected async allDeleteByIdBase({
     dataId,
+    withCondition,
   }: {
     dataId: string;
+    withCondition?: IFieldCondition<T>;
   }): Promise<T> {
     //
     this.allHelpValidateRequiredString({ Del1SortKey: dataId });
@@ -747,9 +743,10 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
       tableFullName,
       partitionKeyFieldName,
       sortKeyFieldName,
+      featureIdentityValue,
     } = this._getLocalVariables();
 
-    const dataExist = await this.allDeleteByIdBase({ dataId });
+    const dataExist = await this.allGetOneByIdBase({ dataId, withCondition });
 
     if (!(dataExist && dataExist[partitionKeyFieldName])) {
       throw new GenericDataError("Record does NOT exists");
@@ -759,7 +756,7 @@ export abstract class DynamoDataOperation<T> extends BaseMixins {
       TableName: tableFullName,
       Key: {
         [partitionKeyFieldName]: dataId,
-        [sortKeyFieldName]: sortKeyFieldName,
+        [sortKeyFieldName]: featureIdentityValue,
       },
     };
 
