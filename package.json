@@ -2,8 +2,6 @@
   "name": "dynamodb-data-operation",
   "version": "1.0.21",
   "description": "Dynamodb Operation",
-  "esnext": "dist-src/index.js",
-  "types": "dist-types/index.d.ts",
   "scripts": {
     "pub": "pika publish",
     "inst": "pika install",
@@ -32,9 +30,6 @@
         {
           "tsconfig": "tsconfig.json"
         }
-      ],
-      [
-        "@pika/plugin-build-types"
       ]
     ]
   },
