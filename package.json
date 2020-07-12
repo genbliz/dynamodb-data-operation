@@ -3,6 +3,7 @@
   "version": "1.0.22",
   "description": "Dynamodb Operation",
   "esnext": "dist-src/index.js",
+  "main": "dist-dist/index.js",
   "types": "dist-types/index.d.ts",
   "scripts": {
     "pub": "pika publish",
@@ -25,6 +26,9 @@
     "url": "https://github.com/genbliz/dynamodb-data-operation/issues"
   },
   "homepage": "https://github.com/genbliz/dynamodb-data-operation#readme",
+  "files": [
+    "dist-*/"
+  ],
   "@pika/pack": {
     "pipeline": [
       [
@@ -32,6 +36,12 @@
         {
           "tsconfig": "tsconfig.json"
         }
+      ],
+      [
+        "@pika/plugin-build-types"
+      ],
+      [
+        "@pika/plugin-build-node"
       ]
     ]
   },
