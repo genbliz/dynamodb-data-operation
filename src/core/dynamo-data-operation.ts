@@ -29,7 +29,7 @@ interface IDynamoOptions<T> {
 }
 
 function createTenantSchema(schemaMapDef: Joi.SchemaMap) {
-  return Joi.object().keys(schemaMapDef).keys(coreSchemaDefinition);
+  return Joi.object().keys({ ...schemaMapDef, ...coreSchemaDefinition });
 }
 
 type IModelKeys = keyof IDynamoDataCoreEntityModel;
@@ -503,16 +503,18 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     return result;
   }
 
-  protected async allBatchGetManyByHashAndSortKey({
+  protected async allBatchGetManyByIdsBase({
     dataIds,
     fields,
+    withCondition,
   }: {
     dataIds: string[];
     fields?: (keyof T)[];
+    withCondition?: IFieldCondition<T>;
   }) {
-    dataIds.forEach((sortKeyValue) => {
+    dataIds.forEach((dataId) => {
       this.allHelpValidateRequiredString({
-        BatchGetSortKey: sortKeyValue,
+        BatchGetDataId: dataId,
       });
     });
 
@@ -579,13 +581,24 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
 
       let returnedItems: any[] = [];
 
+      const resolveItemResults = (resultItems: any[]) => {
+        if (resultItems?.length && withCondition?.length) {
+          return resultItems.filter((item) => {
+            return withCondition.every(
+              ({ field, equals }) => item[field] === equals
+            );
+          });
+        }
+        return resultItems;
+      };
+
       const batchGetUntilDone = (
         err: AWS.AWSError,
         data: DynamoDB.BatchGetItemOutput
       ) => {
         if (err) {
           if (returnedItems?.length) {
-            resolve(returnedItems);
+            resolve(resolveItemResults(returnedItems));
           } else {
             reject(err.stack);
           }
@@ -604,7 +617,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
             console.log({ dynamoBatchGetParams: _params });
             this._dynamoDb().batchGetItem(_params, batchGetUntilDone);
           } else {
-            resolve(returnedItems);
+            resolve(resolveItemResults(returnedItems));
           }
         }
       };

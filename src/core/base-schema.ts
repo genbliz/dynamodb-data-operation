@@ -18,8 +18,8 @@ export interface IDynamoDataCoreEntityModel {
 }
 
 export const coreSchemaDefinition = {
-  id: Joi.string().required().min(3).max(100),
-  featureIdentity: Joi.string().required().min(3).max(100),
+  id: Joi.string().required().min(5).max(100),
+  featureIdentity: Joi.string().required().min(3).max(50),
   //
   lastModifierUserId: Joi.string().allow(null).empty("").default(null),
   lastModifiedDate: dateISOValidation(),
