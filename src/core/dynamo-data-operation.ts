@@ -231,45 +231,6 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     return item;
   }
 
-  protected async allGetOneByIdProjectBase<TExpectedVals = T>({
-    dataId,
-    projectionAttributes,
-    withCondition,
-  }: {
-    dataId: string;
-    projectionAttributes: (keyof TExpectedVals)[];
-    withCondition?: IFieldCondition<T>;
-  }) {
-    this.allHelpValidateRequiredString({ Get1DataId: dataId });
-
-    const {
-      partitionKeyFieldName,
-      sortKeyFieldName,
-      featureIdentityValue,
-      tableFullName,
-    } = this._getLocalVariables();
-
-    const params: DocumentClient.GetItemInput = {
-      TableName: tableFullName,
-      Key: {
-        [partitionKeyFieldName]: dataId,
-        [sortKeyFieldName]: featureIdentityValue,
-      },
-      ProjectionExpression: projectionAttributes.join(", ").trim(),
-    };
-
-    const result = await this._dynamoDbClient().get(params).promise();
-    const item = result.Item as any;
-    if (!item) {
-      return null;
-    }
-    const isPassed = this.withConditionPassed({ withCondition, item });
-    if (!isPassed) {
-      return null;
-    }
-    return item;
-  }
-
   protected async allUpdateOneDirectBase({ data }: { data: T }) {
     this._checkValidateStrictRequiredFields(data);
 
@@ -369,27 +330,6 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       validatedData: value,
       marshalled: marshalledData,
     });
-  }
-
-  //================================
-
-  protected async allExistsByIdBase(dataId: string) {
-    this.allHelpValidateRequiredString({ Exist1DataId: dataId });
-
-    const { partitionKeyFieldName } = this._getLocalVariables();
-
-    type IProject = {
-      [n: string]: string;
-    };
-
-    const data = await this.allGetOneByIdProjectBase<IProject>({
-      dataId,
-      projectionAttributes: [partitionKeyFieldName],
-    });
-    if (data && data[partitionKeyFieldName]) {
-      return true;
-    }
-    return false;
   }
 
   protected async allQueryGetManyByConditionBase(
@@ -550,7 +490,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       if (fields?.length) {
         const _fields: any[] = [...fields];
         if (fields?.length && withCondition?.length) {
-          /** Add excluded  */
+          /** Add excluded condition */
           withCondition.forEach((condition) => {
             if (!fields.includes(condition.field)) {
               _fields.push(condition.field);
