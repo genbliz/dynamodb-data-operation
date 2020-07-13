@@ -549,6 +549,14 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
 
       if (fields?.length) {
         const _fields: any[] = [...fields];
+        if (fields?.length && withCondition?.length) {
+          /** Add excluded  */
+          withCondition.forEach((condition) => {
+            if (!fields.includes(condition.field)) {
+              _fields.push(condition.field);
+            }
+          });
+        }
         expressionAttributeNames = {};
         _fields.forEach((fieldName) => {
           if (typeof fieldName === "string") {
@@ -583,14 +591,6 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
 
       const resolveItemResults = (resultItems: any[]) => {
         if (resultItems?.length && withCondition?.length) {
-          if (fields?.length) {
-            const isAllFieldsProjected = withCondition.every((condition) => {
-              return fields.includes(condition.field);
-            });
-            if (!isAllFieldsProjected) {
-              return resultItems;
-            }
-          }
           return resultItems.filter((item) => {
             return withCondition.every((condition) => {
               return item[condition.field] === condition.equals;
