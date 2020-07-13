@@ -583,10 +583,18 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
 
       const resolveItemResults = (resultItems: any[]) => {
         if (resultItems?.length && withCondition?.length) {
+          if (fields?.length) {
+            const isAllFieldsProjected = withCondition.every((condition) => {
+              return fields.includes(condition.field);
+            });
+            if (!isAllFieldsProjected) {
+              return resultItems;
+            }
+          }
           return resultItems.filter((item) => {
-            return withCondition.every(
-              ({ field, equals }) => item[field] === equals
-            );
+            return withCondition.every((condition) => {
+              return item[condition.field] === condition.equals;
+            });
           });
         }
         return resultItems;
