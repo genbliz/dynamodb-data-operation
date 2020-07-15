@@ -155,12 +155,8 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       dataId = this.generateDynamoTableKey();
     }
 
-    const baseData = {
-      createdAtDate: new Date().toISOString(),
-    } as IDynamoDataCoreEntityModel;
-
     const dataMust = this._getBaseObject({ dataId });
-    const fullData = { ...data, ...baseData, ...dataMust };
+    const fullData = { ...data, ...dataMust };
 
     const {
       validatedData,
@@ -244,11 +240,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
 
     const dataMust = this._getBaseObject({ dataId });
 
-    const baseData = {
-      lastModifiedDate: new Date().toISOString(),
-    } as IDynamoDataCoreEntityModel;
-
-    const fullData = { ...data, ...baseData, ...dataMust };
+    const fullData = { ...data, ...dataMust };
     //
     const {
       validatedData,
