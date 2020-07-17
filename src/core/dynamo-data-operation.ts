@@ -22,7 +22,7 @@ interface IDynamoOptions<T> {
   schemaDef: Joi.SchemaMap;
   dynamoDbClient: () => DocumentClient;
   dataKeyGenerator: () => string;
-  featureIdentityValue: string;
+  featureEntityValue: string;
   secondaryIndexOptions: ISecondaryIndexDef<T>[];
   baseTableName: string;
   strictRequiredFields: (keyof T)[] | string[];
@@ -36,7 +36,7 @@ type IModelKeys = keyof IDynamoDataCoreEntityModel;
 
 export default abstract class DynamoDataOperation<T> extends BaseMixins {
   private readonly here_partitionKeyFieldName: IModelKeys = "id";
-  private readonly here_sortKeyFieldName: IModelKeys = "featureIdentity";
+  private readonly here_sortKeyFieldName: IModelKeys = "featureEntity";
   //
   private readonly here_dynamoDbClient: () => DocumentClient;
   private readonly here_dynamoDb: () => DynamoDB;
@@ -45,7 +45,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
   private readonly here_marshaller: Marshaller;
   private readonly here_tableFullName: string;
   private readonly here_strictRequiredFields: string[];
-  private readonly here_featureIdentityValue: string;
+  private readonly here_featureEntityValue: string;
   private readonly here_secondaryIndexOptions: ISecondaryIndexDef<T>[];
   //
   private here_tableManager!: DynamoManageTable<T>;
@@ -55,7 +55,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     schemaDef,
     dynamoDbClient,
     secondaryIndexOptions,
-    featureIdentityValue,
+    featureEntityValue,
     baseTableName,
     strictRequiredFields,
     dataKeyGenerator,
@@ -67,7 +67,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     this.here_schema = createTenantSchema(schemaDef);
     this.here_tableFullName = baseTableName;
     this.here_marshaller = new Marshaller({ onEmpty: "omit" });
-    this.here_featureIdentityValue = featureIdentityValue;
+    this.here_featureEntityValue = featureEntityValue;
     this.here_secondaryIndexOptions = secondaryIndexOptions;
     this.here_strictRequiredFields = strictRequiredFields as string[];
   }
@@ -102,7 +102,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       partitionKeyFieldName: this.here_partitionKeyFieldName,
       sortKeyFieldName: this.here_sortKeyFieldName,
       //
-      featureIdentityValue: this.here_featureIdentityValue,
+      featureEntityValue: this.here_featureEntityValue,
       //
       tableFullName: this.here_tableFullName,
       secondaryIndexOptions: this.here_secondaryIndexOptions,
@@ -114,12 +114,12 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     const {
       partitionKeyFieldName,
       sortKeyFieldName,
-      featureIdentityValue,
+      featureEntityValue,
     } = this._getLocalVariables();
 
     const dataMust = {
       [partitionKeyFieldName]: dataId,
-      [sortKeyFieldName]: featureIdentityValue,
+      [sortKeyFieldName]: featureEntityValue,
     };
     return dataMust;
   }
@@ -199,20 +199,20 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     const {
       partitionKeyFieldName,
       sortKeyFieldName,
-      featureIdentityValue,
+      featureEntityValue,
       tableFullName,
     } = this._getLocalVariables();
 
     this.allHelpValidateRequiredString({
       QueryGetOnePartitionKey: dataId,
-      QueryGetOneSortKey: featureIdentityValue,
+      QueryGetOneSortKey: featureEntityValue,
     });
 
     const params: DocumentClient.GetItemInput = {
       TableName: tableFullName,
       Key: {
         [partitionKeyFieldName]: dataId,
-        [sortKeyFieldName]: featureIdentityValue,
+        [sortKeyFieldName]: featureEntityValue,
       },
     };
     const result = await this._dynamoDbClient().get(params).promise();
@@ -463,13 +463,13 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
         tableFullName,
         partitionKeyFieldName,
         sortKeyFieldName,
-        featureIdentityValue,
+        featureEntityValue,
       } = this._getLocalVariables();
 
       const getArray: DynamoDB.Key[] = dataIds.map((dataId) => {
         const params01 = {
           [partitionKeyFieldName]: { S: dataId },
-          [sortKeyFieldName]: { S: featureIdentityValue },
+          [sortKeyFieldName]: { S: featureEntityValue },
         };
         return params01;
       });
@@ -697,7 +697,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       tableFullName,
       partitionKeyFieldName,
       sortKeyFieldName,
-      featureIdentityValue,
+      featureEntityValue,
     } = this._getLocalVariables();
 
     const dataExist = await this.allGetOneByIdBase({ dataId, withCondition });
@@ -710,7 +710,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       TableName: tableFullName,
       Key: {
         [partitionKeyFieldName]: dataId,
-        [sortKeyFieldName]: featureIdentityValue,
+        [sortKeyFieldName]: featureEntityValue,
       },
     };
 
@@ -734,7 +734,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       tableFullName,
       partitionKeyFieldName,
       sortKeyFieldName,
-      featureIdentityValue,
+      featureEntityValue,
     } = this._getLocalVariables();
 
     const delArray = dataIds.map((dataId) => {
@@ -742,7 +742,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
         DeleteRequest: {
           Key: {
             [partitionKeyFieldName]: { S: dataId },
-            [sortKeyFieldName]: { S: featureIdentityValue },
+            [sortKeyFieldName]: { S: featureEntityValue },
           },
         },
       };
