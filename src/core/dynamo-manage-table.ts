@@ -101,7 +101,7 @@ export class DynamoManageTable<T> {
       return false;
     }
     if (result?.GlobalSecondaryIndexes) {
-      // console.log(JSON.stringify({ tableInfo: result }, null, 2));
+      //
     }
     return true;
   }
@@ -201,10 +201,7 @@ export class DynamoManageTable<T> {
           );
 
           if (indexCount !== newSecondaryIndexOptions.length) {
-            const label = `Created Index '${indexName}'`;
-            console.time(label);
             await UtilService.waitUntilMunites(5);
-            console.timeEnd(label);
           }
         }
       }
@@ -244,10 +241,7 @@ export class DynamoManageTable<T> {
           );
 
           if (indexCount !== staledIndexNames.length) {
-            const label = `Deleted Index '${indexName}'`;
-            console.time(label);
             await UtilService.waitUntilMunites(1);
-            console.timeEnd(label);
           }
         }
       }
@@ -257,7 +251,7 @@ export class DynamoManageTable<T> {
       }
 
       if (updateResults.length) {
-        console.log({
+        LoggingService.log({
           "@allCreateGlobalSecondaryIndexBase": "",
           updateResults,
         });
