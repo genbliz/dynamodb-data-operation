@@ -138,7 +138,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     if (strictRequiredFields?.length) {
       for (const field of strictRequiredFields) {
         if (onDataObj[field] === null || onDataObj[field] === undefined) {
-          throw new GenericDataError(`Required field NOT defined`);
+          throw new GenericDataError(`Strict required field NOT defined`);
         }
       }
     }
@@ -275,7 +275,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     const dataInDb = await this.allGetOneByIdBase({ dataId });
 
     if (!(dataInDb && dataInDb[partitionKeyFieldName])) {
-      throw new GenericDataError("Data does NOT exists");
+      throw this.allHelpCreateFriendlyError("Data does NOT exists");
     }
 
     const isPassed = this.withConditionPassed({
@@ -314,7 +314,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
 
     if (error) {
       const msg = getJoiValidationErrors(error) ?? "Validation error occured";
-      throw new GenericDataError(msg);
+      throw this.allHelpCreateFriendlyError(msg);
     }
     const marshalledData = this.here_marshaller.marshallItem(value);
 
@@ -703,7 +703,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     const dataExist = await this.allGetOneByIdBase({ dataId, withCondition });
 
     if (!(dataExist && dataExist[partitionKeyFieldName])) {
-      throw new GenericDataError("Record does NOT exists");
+      throw this.allHelpCreateFriendlyError("Record does NOT exists");
     }
 
     const params: DocumentClient.DeleteItemInput = {

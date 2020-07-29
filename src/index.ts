@@ -10,7 +10,7 @@ export {
   IQueryDefinition,
 } from "./types";
 export { IDynamoDataCoreEntityModel } from "./core/base-schema";
-export { GenericDataError } from "./helpers/errors";
+export { GenericDataError, GenericFriendlyError } from "./helpers/errors";
 import DynamoDataOp from "./core/dynamo-data-operation";
 
 export const DynamoDataOperation = DynamoDataOp;

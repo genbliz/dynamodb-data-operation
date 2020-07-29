@@ -1,4 +1,4 @@
-import { GenericDataError, GenericFriendlyError } from "../helpers/errors";
+import { GenericFriendlyError } from "../helpers/errors";
 import { DynamoFilterQueryOperation } from "./dynamo-filter-query-operation";
 import { DynamoQueryScanProcessor } from "./dynamo-query-scan-processor";
 
@@ -32,7 +32,7 @@ export abstract class DynamoFilterQueryMixin {
       }
     });
     if (errors.length) {
-      throw new GenericDataError(`${errors.join("; ")}.`);
+      throw new GenericFriendlyError(`${errors.join("; ")}.`);
     }
   }
 
@@ -50,7 +50,7 @@ export abstract class DynamoFilterQueryMixin {
       }
     });
     if (errors.length) {
-      throw new GenericDataError(`${errors.join("; ")}.`);
+      throw new GenericFriendlyError(`${errors.join("; ")}.`);
     }
   }
 }
