@@ -1,6 +1,7 @@
 import type { DynamoDB, AWSError } from "aws-sdk";
 import type { IDynamoPagingResult } from "../types";
 import type { DocumentClient } from "aws-sdk/clients/dynamodb";
+import { LoggingService } from "../helpers/logging-service";
 
 export abstract class DynamoQueryScanProcessor {
   //
@@ -58,7 +59,7 @@ export abstract class DynamoQueryScanProcessor {
 
     type IResult = DynamoDB.QueryOutput | DynamoDB.ScanOutput;
 
-    console.log({
+    LoggingService.log({
       processorParamsInit: {
         operation,
         pageSize,
@@ -98,7 +99,7 @@ export abstract class DynamoQueryScanProcessor {
 
       const queryScanUntilDone = (err: AWSError, data: IResult) => {
         if (err) {
-          console.log(err, err.stack);
+          LoggingService.log(err, err.stack);
           if (returnedItems?.length) {
             resolve({ mainResult: returnedItems });
           } else {
@@ -115,7 +116,7 @@ export abstract class DynamoQueryScanProcessor {
               dataObj,
               hashKeyAndSortKey
             );
-            console.log({ customLastEvaluationKey });
+            LoggingService.log({ customLastEvaluationKey });
           }
 
           if (pageSize && returnedItems.length >= pageSize) {
@@ -142,7 +143,10 @@ export abstract class DynamoQueryScanProcessor {
             if (_evaluationLimit) {
               _paramsDef.Limit = _evaluationLimit;
             }
-            console.log({ operation, dynamoProcessorParams: _paramsDef });
+            LoggingService.log({
+              operation,
+              dynamoProcessorParams: _paramsDef,
+            });
 
             dynamoDbClient()[operation](_paramsDef, queryScanUntilDone);
           } else {
@@ -164,7 +168,7 @@ export abstract class DynamoQueryScanProcessor {
       if (orderDesc === true && operation === "query") {
         _params["ScanIndexForward"] = false;
       }
-      console.log({ operation, dynamoProcessorParams: _params });
+      LoggingService.log({ operation, dynamoProcessorParams: _params });
       dynamoDbClient()[operation](_params, queryScanUntilDone);
     });
   }

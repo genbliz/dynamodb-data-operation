@@ -16,6 +16,7 @@ import {
   IDynamoDataCoreEntityModel,
 } from "./base-schema";
 import { DynamoManageTable } from "./dynamo-manage-table";
+import { LoggingService } from "../helpers/logging-service";
 
 interface IDynamoOptions<T> {
   dynamoDb: () => DynamoDB;
@@ -558,7 +559,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
             const _params: DynamoDB.BatchGetItemInput = {
               RequestItems: data.UnprocessedKeys,
             };
-            console.log({ dynamoBatchGetParams: _params });
+            LoggingService.log({ dynamoBatchGetParams: _params });
             this._dynamoDb().batchGetItem(_params, batchGetUntilDone);
           } else {
             resolve(resolveItemResults(returnedItems));
