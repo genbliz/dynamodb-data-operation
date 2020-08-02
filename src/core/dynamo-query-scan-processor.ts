@@ -122,12 +122,21 @@ export abstract class DynamoQueryScanProcessor {
             const scanResult: IDynamoPagingResult<T[]> = {
               mainResult: returnedItems,
             };
-            if (data.LastEvaluatedKey) {
+
+            if (
+              data.LastEvaluatedKey &&
+              Object.keys(data.LastEvaluatedKey).length
+            ) {
               const lastKeyHash = this.__encodeLastKey(data.LastEvaluatedKey);
               scanResult.lastKeyHash = lastKeyHash;
             }
             resolve(scanResult);
-          } else if (data.LastEvaluatedKey) {
+          } else if (
+            //
+            data.LastEvaluatedKey &&
+            Object.keys(data.LastEvaluatedKey).length
+          ) {
+            //
             const _paramsDef = { ...params };
             _paramsDef.ExclusiveStartKey = data.LastEvaluatedKey;
             if (_evaluationLimit) {

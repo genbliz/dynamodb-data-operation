@@ -550,9 +550,10 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
             });
             returnedItems = [...returnedItems, ...itemList];
           }
+
           if (
             data?.UnprocessedKeys &&
-            Object.keys(data?.UnprocessedKeys || {}).length > 0
+            Object.keys(data?.UnprocessedKeys).length
           ) {
             const _params: DynamoDB.BatchGetItemInput = {
               RequestItems: data.UnprocessedKeys,
