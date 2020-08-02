@@ -450,15 +450,15 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       });
     });
 
-    const getRandom = () =>
-      [
-        "rand",
-        Math.round(Math.random() * 99999),
-        Math.round(Math.random() * 88888),
-        Math.round(Math.random() * 99),
-      ].join("");
-
     return new Promise<T[]>((resolve, reject) => {
+      const getRandom = () =>
+        [
+          "rand",
+          Math.round(Math.random() * 99999),
+          Math.round(Math.random() * 88888),
+          Math.round(Math.random() * 99),
+        ].join("");
+
       const {
         tableFullName,
         partitionKeyFieldName,
@@ -529,7 +529,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
             });
           });
         }
-        return resultItems;
+        return resultItems || [];
       };
 
       const batchGetUntilDone = (
@@ -550,7 +550,10 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
             });
             returnedItems = [...returnedItems, ...itemList];
           }
-          if (data?.UnprocessedKeys) {
+          if (
+            data?.UnprocessedKeys &&
+            Object.keys(data?.UnprocessedKeys || {}).length > 0
+          ) {
             const _params: DynamoDB.BatchGetItemInput = {
               RequestItems: data.UnprocessedKeys,
             };
