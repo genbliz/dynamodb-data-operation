@@ -11,10 +11,7 @@ import Joi from "@hapi/joi";
 import { Marshaller } from "@aws/dynamodb-auto-marshaller";
 import { getJoiValidationErrors } from "../core/base-joi-helper";
 import BaseMixins from "../core/base-mixins";
-import {
-  coreSchemaDefinition,
-  IDynamoDataCoreEntityModel,
-} from "./base-schema";
+import { coreSchemaDefinition, IDynamoDataCoreEntityModel } from "./base-schema";
 import { DynamoManageTable } from "./dynamo-manage-table";
 import { LoggingService } from "../helpers/logging-service";
 
@@ -112,11 +109,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
   }
 
   private _getBaseObject({ dataId }: { dataId: string }) {
-    const {
-      partitionKeyFieldName,
-      sortKeyFieldName,
-      featureEntityValue,
-    } = this._getLocalVariables();
+    const { partitionKeyFieldName, sortKeyFieldName, featureEntityValue } = this._getLocalVariables();
 
     const dataMust = {
       [partitionKeyFieldName]: dataId,
@@ -159,10 +152,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     const dataMust = this._getBaseObject({ dataId });
     const fullData = { ...data, ...dataMust };
 
-    const {
-      validatedData,
-      marshalled,
-    } = await this._allHelpValidateMarshallAndGetValue(fullData);
+    const { validatedData, marshalled } = await this._allHelpValidateMarshallAndGetValue(fullData);
 
     const params: DocumentClient.PutItemInput = {
       TableName: tableFullName,
@@ -174,13 +164,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     return result;
   }
 
-  private withConditionPassed({
-    item,
-    withCondition,
-  }: {
-    item: any;
-    withCondition?: IFieldCondition<T>;
-  }) {
+  private withConditionPassed({ item, withCondition }: { item: any; withCondition?: IFieldCondition<T> }) {
     if (item && withCondition?.length) {
       const isPassed = withCondition.every(({ field, equals }) => {
         return item[field] !== undefined && item[field] === equals;
@@ -197,12 +181,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     dataId: string;
     withCondition?: IFieldCondition<T>;
   }): Promise<T | null> {
-    const {
-      partitionKeyFieldName,
-      sortKeyFieldName,
-      featureEntityValue,
-      tableFullName,
-    } = this._getLocalVariables();
+    const { partitionKeyFieldName, sortKeyFieldName, featureEntityValue, tableFullName } = this._getLocalVariables();
 
     this.allHelpValidateRequiredString({
       QueryGetOnePartitionKey: dataId,
@@ -243,10 +222,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
 
     const fullData = { ...data, ...dataMust };
     //
-    const {
-      validatedData,
-      marshalled,
-    } = await this._allHelpValidateMarshallAndGetValue(fullData);
+    const { validatedData, marshalled } = await this._allHelpValidateMarshallAndGetValue(fullData);
 
     const params: DocumentClient.PutItemInput = {
       TableName: tableFullName,
@@ -293,10 +269,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
 
     const fullData = { ...dataInDb, ...data, ...dataMust };
 
-    const {
-      validatedData,
-      marshalled,
-    } = await this._allHelpValidateMarshallAndGetValue(fullData);
+    const { validatedData, marshalled } = await this._allHelpValidateMarshallAndGetValue(fullData);
 
     const params: DocumentClient.PutItemInput = {
       TableName: tableFullName,
@@ -325,27 +298,17 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     });
   }
 
-  protected async allQueryGetManyByConditionBase(
-    paramOptions: IDynamoQueryParamOptions<T>
-  ) {
+  protected async allQueryGetManyByConditionBase(paramOptions: IDynamoQueryParamOptions<T>) {
     paramOptions.pagingParams = undefined;
-    const result = await this.allQueryGetManyByConditionPaginateBase(
-      paramOptions
-    );
+    const result = await this.allQueryGetManyByConditionPaginateBase(paramOptions);
     if (result?.mainResult?.length) {
       return result.mainResult;
     }
     return [];
   }
 
-  protected async allQueryGetManyByConditionPaginateBase(
-    paramOptions: IDynamoQueryParamOptions<T>
-  ) {
-    const {
-      tableFullName,
-      sortKeyFieldName,
-      partitionKeyFieldName,
-    } = this._getLocalVariables();
+  protected async allQueryGetManyByConditionPaginateBase(paramOptions: IDynamoQueryParamOptions<T>) {
+    const { tableFullName, sortKeyFieldName, partitionKeyFieldName } = this._getLocalVariables();
     //
     if (!paramOptions?.partitionKeyQuery?.equals === undefined) {
       throw new GenericDataError("Invalid Hash key value");
@@ -387,14 +350,10 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
         projectionFields: null,
       });
 
-      otherExpressionAttributeValues =
-        filterOtherAttr.expressionAttributeValues;
+      otherExpressionAttributeValues = filterOtherAttr.expressionAttributeValues;
       otherExpressionAttributeNames = filterOtherAttr.expressionAttributeNames;
 
-      if (
-        filterOtherAttr?.filterExpression &&
-        filterOtherAttr?.filterExpression.length > 1
-      ) {
+      if (filterOtherAttr?.filterExpression && filterOtherAttr?.filterExpression.length > 1) {
         otherFilterExpression = filterOtherAttr.filterExpression;
       }
     }
@@ -421,10 +380,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       params.ScanIndexForward = false;
     }
 
-    const hashKeyAndSortKey: [string, string] = [
-      partitionKeyFieldName,
-      sortKeyFieldName,
-    ];
+    const hashKeyAndSortKey: [string, string] = [partitionKeyFieldName, sortKeyFieldName];
 
     const paginationObjects = { ...paramOptions.pagingParams };
     const result = await this.__helperDynamoQueryProcessor<T>({
@@ -460,12 +416,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
           Math.round(Math.random() * 99),
         ].join("");
 
-      const {
-        tableFullName,
-        partitionKeyFieldName,
-        sortKeyFieldName,
-        featureEntityValue,
-      } = this._getLocalVariables();
+      const { tableFullName, partitionKeyFieldName, sortKeyFieldName, featureEntityValue } = this._getLocalVariables();
 
       const getArray: DynamoDB.Key[] = dataIds.map((dataId) => {
         const params01 = {
@@ -476,9 +427,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       });
 
       let projectionExpression: string | undefined = undefined;
-      let expressionAttributeNames:
-        | DynamoDB.ExpressionAttributeNameMap
-        | undefined = undefined;
+      let expressionAttributeNames: DynamoDB.ExpressionAttributeNameMap | undefined = undefined;
 
       if (fields?.length) {
         const _fields: any[] = [...fields];
@@ -500,9 +449,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
           }
         });
         if (Object.keys(expressionAttributeNames)?.length) {
-          projectionExpression = Object.keys(expressionAttributeNames).join(
-            ","
-          );
+          projectionExpression = Object.keys(expressionAttributeNames).join(",");
         } else {
           projectionExpression = undefined;
           expressionAttributeNames = undefined;
@@ -533,10 +480,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
         return resultItems || [];
       };
 
-      const batchGetUntilDone = (
-        err: AWS.AWSError,
-        data: DynamoDB.BatchGetItemOutput
-      ) => {
+      const batchGetUntilDone = (err: AWS.AWSError, data: DynamoDB.BatchGetItemOutput) => {
         if (err) {
           if (returnedItems?.length) {
             resolve(resolveItemResults(returnedItems));
@@ -552,10 +496,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
             returnedItems = [...returnedItems, ...itemList];
           }
 
-          if (
-            data?.UnprocessedKeys &&
-            Object.keys(data?.UnprocessedKeys).length
-          ) {
+          if (data?.UnprocessedKeys && Object.keys(data?.UnprocessedKeys).length) {
             const _params: DynamoDB.BatchGetItemInput = {
               RequestItems: data.UnprocessedKeys,
             };
@@ -570,21 +511,19 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     });
   }
 
-  protected async allQuerySecondaryIndexBase<TData = T>(
-    paramOption: IDynamoQuerySecondayIndexOptions<TData>
+  protected async allQuerySecondaryIndexBase<TData = T, TSortKeyField = string>(
+    paramOption: IDynamoQuerySecondayIndexOptions<TData, TSortKeyField>,
   ) {
     paramOption.pagingParams = undefined;
-    const result = await this.allQuerySecondaryIndexPaginateBase<TData>(
-      paramOption
-    );
+    const result = await this.allQuerySecondaryIndexPaginateBase<TData, TSortKeyField>(paramOption);
     if (result?.mainResult) {
       return result.mainResult;
     }
     return [];
   }
 
-  protected async allQuerySecondaryIndexPaginateBase<TData = T>(
-    paramOption: IDynamoQuerySecondayIndexOptions<TData>
+  protected async allQuerySecondaryIndexPaginateBase<TData = T, TSortKeyField = string>(
+    paramOption: IDynamoQuerySecondayIndexOptions<TData, TSortKeyField>,
   ) {
     const { tableFullName, secondaryIndexOptions } = this._getLocalVariables();
 
@@ -592,14 +531,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       throw new GenericDataError("Invalid secondary index definitions");
     }
 
-    const {
-      indexName,
-      partitionKeyQuery,
-      sortKeyQuery,
-      fields,
-      pagingParams,
-      query,
-    } = paramOption;
+    const { indexName, partitionKeyQuery, sortKeyQuery, fields, pagingParams, query } = paramOption;
 
     const secondaryIndex = secondaryIndexOptions.find((item) => {
       return item.indexName === indexName;
@@ -641,10 +573,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       otherExpressionAttributeValues = otherAttr.expressionAttributeValues;
       otherExpressionAttributeNames = otherAttr.expressionAttributeNames;
 
-      if (
-        otherAttr?.filterExpression?.length &&
-        otherAttr?.filterExpression.length > 1
-      ) {
+      if (otherAttr?.filterExpression?.length && otherAttr?.filterExpression.length > 1) {
         otherFilterExpression = otherAttr.filterExpression;
       }
     }
@@ -674,10 +603,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       params.ProjectionExpression = projectionExpressionAttr;
     }
 
-    const hashKeyAndSortKey: [string, string] = [
-      partitionKeyFieldName,
-      sortKeyFieldName,
-    ];
+    const hashKeyAndSortKey: [string, string] = [partitionKeyFieldName, sortKeyFieldName];
 
     const result = await this.__helperDynamoQueryProcessor<T>({
       dynamoDbClient: () => this._dynamoDbClient(),
@@ -698,12 +624,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
   }): Promise<T> {
     //
     this.allHelpValidateRequiredString({ Del1SortKey: dataId });
-    const {
-      tableFullName,
-      partitionKeyFieldName,
-      sortKeyFieldName,
-      featureEntityValue,
-    } = this._getLocalVariables();
+    const { tableFullName, partitionKeyFieldName, sortKeyFieldName, featureEntityValue } = this._getLocalVariables();
 
     const dataExist = await this.allGetOneByIdBase({ dataId, withCondition });
 
@@ -723,11 +644,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     return dataExist;
   }
 
-  protected async allDeleteManyDangerouselyByIds({
-    dataIds,
-  }: {
-    dataIds: string[];
-  }): Promise<boolean> {
+  protected async allDeleteManyDangerouselyByIds({ dataIds }: { dataIds: string[] }): Promise<boolean> {
     //
     dataIds.forEach((sortKeyValue) => {
       this.allHelpValidateRequiredString({
@@ -735,12 +652,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       });
     });
 
-    const {
-      tableFullName,
-      partitionKeyFieldName,
-      sortKeyFieldName,
-      featureEntityValue,
-    } = this._getLocalVariables();
+    const { tableFullName, partitionKeyFieldName, sortKeyFieldName, featureEntityValue } = this._getLocalVariables();
 
     const delArray = dataIds.map((dataId) => {
       const params01: DynamoDB.WriteRequest = {

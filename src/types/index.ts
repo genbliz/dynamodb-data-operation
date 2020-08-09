@@ -52,10 +52,10 @@ export interface IDynamoQueryParamOptions<T, ISortKeyObjField = any> {
   pagingParams?: IDynamoPagingParams;
 }
 
-export interface IDynamoQuerySecondayIndexOptions<T, ISortKeyObjField = string> {
+export interface IDynamoQuerySecondayIndexOptions<T, TSortKeyField = string> {
   indexName: string;
   partitionKeyQuery: { equals: string | number };
-  sortKeyQuery?: IDynamoKeyConditionParams<ISortKeyObjField>;
+  sortKeyQuery?: IDynamoKeyConditionParams<TSortKeyField>;
   query?: IQueryDefinition<T>;
   fields?: (keyof T)[];
   pagingParams?: IDynamoPagingParams;
