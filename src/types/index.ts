@@ -1,42 +1,32 @@
+type TypeFallBack<T> = number extends T ? number : string extends T ? string : T;
+type TypeFallBackArray<T> = number extends T ? number[] : string extends T ? string[] : T;
+
 export type IDynamoKeyConditionParams<T = any> = {
-  $eq?: string | number;
-  $gt?: string | number;
-  $gte?: string | number;
-  $lt?: string | number;
-  $lte?: string | number;
-  $between?: [string | number | Date, string | number | Date];
+  $eq?: TypeFallBack<T>;
+  $gt?: TypeFallBack<T>;
+  $gte?: TypeFallBack<T>;
+  $lt?: TypeFallBack<T>;
+  $lte?: TypeFallBack<T>;
+  $between?: [TypeFallBack<T>, TypeFallBack<T>];
   $beginsWith?: string;
 };
 
-export type IDynamoQueryConditionParams<T = any> = IDynamoKeyConditionParams & {
-  $in?: string[] | number[];
+export type IDynamoQueryConditionParams<T = any> = IDynamoKeyConditionParams<T> & {
+  $in?: TypeFallBackArray<T>;
   $contains?: string;
   $notContains?: string;
-  $notEq?: any;
+  $notEq?: TypeFallBackArray<T>;
   $exists?: true;
   $notExists?: true;
 };
 
-type FieldKeyExclude = "";
+type QueryPartialAll<T> = {
+  [P in keyof T]: T[P] | IDynamoQueryConditionParams<T[P]>;
+};
 
-// type ExtractType<T> = Pick<T, Exclude<keyof T, "">>;
-// export type IDynamoSearchOrParamOptions<T> = { [P in keyof T]?: T[any] };
-type QueryPartialAllPre<T> = {
-  [P in keyof T]: T[P] | IDynamoQueryConditionParams<T>;
+type QueryKeyConditionBasic<T> = {
+  [P in keyof T]: T[P] | IDynamoKeyConditionParams<T[P]>;
 };
-type QueryPartialAll<T> = Pick<
-  QueryPartialAllPre<T>,
-  Exclude<keyof QueryPartialAllPre<T>, FieldKeyExclude>
->;
-//
-type QueryKeyConditionPre<T> = {
-  [P in keyof T]: T[P] | IDynamoKeyConditionParams<T>;
-};
-type QueryKeyConditionBasic<T> = Pick<
-  QueryKeyConditionPre<T>,
-  Exclude<keyof QueryKeyConditionPre<T>, FieldKeyExclude>
->;
-//
 
 export interface IDynamoPagingResult<T> {
   lastKeyHash?: any;
@@ -62,22 +52,6 @@ export interface IDynamoQueryParamOptions<T, ISortKeyObjField = any> {
   pagingParams?: IDynamoPagingParams;
 }
 
-/*
-
-export interface IDynamoQuerySecondaryParamOptions<T> {
-  query: IQueryDefinition<T>;
-  fields?: (keyof T)[];
-  pagingParams?: IDynamoPagingParams;
-}
-{
-    partitionEquals: { keyFieldName: keyof T; value: string | number };
-    secondaryIndexName: string;
-    orderDesc?: boolean;
-    sortKeyQueryOptions?: IDynamoQuerySecondaryParamOptions<T>;
-  }
-
-*/
-
 export interface IDynamoQuerySecondayIndexOptions<T, ISortKeyObjField = T> {
   indexName: string;
   partitionKeyQuery: { equals: string | number };
@@ -96,20 +70,3 @@ export interface ISecondaryIndexDef<T> {
 }
 
 export type IFieldCondition<T> = { field: keyof T; equals: string | number }[];
-
-// export type ISecondaryIndexDefDictionary<T, TKeys> = {
-//   [P in keyof TKeys]: ISecondaryIndexDef<T>;
-// };
-
-// export interface IMyDynamoDbTransactions<TInsert, TUpdate> {
-//   insert: {
-//     tableFullName: string;
-//     insertTransact: TInsert;
-//     paramWhereOptions?: IDynamoScanParamOptions<TInsert>;
-//   };
-//   update: {
-//     tableFullName: string;
-//     updateTransact: TUpdate;
-//     paramWhereOptions?: IDynamoScanParamOptions<TUpdate>;
-//   };
-// }
