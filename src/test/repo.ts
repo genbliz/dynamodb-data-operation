@@ -10,10 +10,22 @@ export interface IPayment {
   remark: string;
 }
 
-const query: IQueryDefinition<IPayment> = { amount: 0, category: "" };
-if (query) {
-  //
-}
+// const query: IQueryDefinition<IPayment> = { amount: 0, category: "" };
+// if (query) {
+//   //
+// }
+
+const _searchTerm = "";
+
+export const paramOptions: IQueryDefinition<IPayment> = {
+  $or: [
+    { amount: { $contains: _searchTerm } },
+    { category: { $contains: _searchTerm } },
+    { invoiceId: { $contains: _searchTerm } },
+    { transactionId: { $contains: _searchTerm } },
+    { remark: { $contains: _searchTerm } },
+  ],
+};
 
 const schemaSubDef = {
   category: Joi.string().required(),
