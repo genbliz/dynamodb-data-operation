@@ -1,23 +1,31 @@
-type TypeFallBack<T> = number extends T ? number : string extends T ? string : T;
+type RequireAtLeastOneBase<T, Keys extends keyof T = keyof T> = Pick<T, Exclude<keyof T, Keys>> &
+  {
+    /* https://stackoverflow.com/questions/40510611/typescript-interface-require-one-of-two-properties-to-exist*/
+    [K in Keys]-?: Required<Pick<T, K>> & Partial<Pick<T, Exclude<Keys, K>>>;
+  }[Keys];
+type RequireAtLeastOne<T> = RequireAtLeastOneBase<T, keyof T>;
+
+// type TypeFallBack0<T> = number extends T ? number : string extends T ? string : T;
+type TypeFallBack<T> = undefined extends T ? Exclude<T, undefined> : T;
 type TypeFallBackArray<T> = number extends T ? number[] : string extends T ? string[] : T;
 
 export type IDynamoKeyConditionParams<T = any> = {
-  $eq?: TypeFallBack<T>;
-  $gt?: TypeFallBack<T>;
-  $gte?: TypeFallBack<T>;
-  $lt?: TypeFallBack<T>;
-  $lte?: TypeFallBack<T>;
-  $between?: [TypeFallBack<T>, TypeFallBack<T>];
-  $beginsWith?: string;
+  $eq: TypeFallBack<T>;
+  $gt: TypeFallBack<T>;
+  $gte: TypeFallBack<T>;
+  $lt: TypeFallBack<T>;
+  $lte: TypeFallBack<T>;
+  $between: [TypeFallBack<T>, TypeFallBack<T>];
+  $beginsWith: string;
 };
 
 export type IDynamoQueryConditionParams<T = any> = IDynamoKeyConditionParams<T> & {
-  $in?: TypeFallBackArray<T>;
-  $contains?: string;
-  $notContains?: string;
-  $notEq?: TypeFallBackArray<T>;
-  $exists?: true;
-  $notExists?: true;
+  $in: TypeFallBackArray<T>;
+  $contains: string;
+  $notContains: string;
+  $notEq: TypeFallBackArray<T>;
+  $exists: true;
+  $notExists: true;
 };
 
 type QueryPartialAll<T> = {
@@ -40,12 +48,12 @@ export type IDynamoPagingParams = {
   orderDesc?: boolean;
 };
 
-export type IQueryDefinition<T> = QueryPartialAll<Partial<T>> & {
-  $or?: QueryPartialAll<Partial<T>>[];
+export type IQueryDefinition<T> = QueryPartialAll<T> & {
+  $or?: QueryPartialAll<T>[];
 };
 
 export interface IDynamoQueryParamOptions<T, ISortKeyObjField = any> {
-  query?: IQueryDefinition<T>;
+  query?: IQueryDefinition<RequireAtLeastOne<T>>;
   fields?: (keyof T)[];
   partitionKeyQuery: { equals: string | number };
   sortKeyQuery?: QueryKeyConditionBasic<Required<ISortKeyObjField>>;
@@ -56,7 +64,7 @@ export interface IDynamoQuerySecondayIndexOptions<T, TSortKeyField = string> {
   indexName: string;
   partitionKeyQuery: { equals: string | number };
   sortKeyQuery?: IDynamoKeyConditionParams<TSortKeyField>;
-  query?: IQueryDefinition<T>;
+  query?: IQueryDefinition<RequireAtLeastOne<T>>;
   fields?: (keyof T)[];
   pagingParams?: IDynamoPagingParams;
 }

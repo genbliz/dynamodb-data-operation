@@ -4,9 +4,9 @@ import Joi from "@hapi/joi";
 export interface IPayment {
   amount: number;
   category: string;
-  invoiceId?: string;
+  invoiceId: string;
   transactionId?: string;
-  remark?: string;
+  remark: string;
 }
 
 const schemaSubDef = {
@@ -18,11 +18,10 @@ const schemaSubDef = {
 };
 
 const getRandom = () =>
-  [
-    Math.round(Math.random() * 99999),
-    Math.round(Math.random() * 88),
-    Math.round(Math.random() * 99),
-  ].reduce((prev, cur) => prev + cur, 0);
+  [Math.round(Math.random() * 99999), Math.round(Math.random() * 88), Math.round(Math.random() * 99)].reduce(
+    (prev, cur) => prev + cur,
+    0,
+  );
 
 class MyRepositoryBase extends BaseRepository<IPayment> {
   constructor() {
@@ -30,6 +29,18 @@ class MyRepositoryBase extends BaseRepository<IPayment> {
       schemaSubDef,
       secondaryIndexOptions: [],
       featureEntityValue: "table_users",
+    });
+  }
+
+  getIt() {
+    return this.allQueryGetManyByConditionBase({
+      partitionKeyQuery: {
+        equals: 0,
+      },
+      fields: ["amount"],
+      query: {
+        amount: 9,
+      },
     });
   }
 
