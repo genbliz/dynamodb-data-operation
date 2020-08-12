@@ -10,22 +10,22 @@ type TypeFallBack<T> = undefined extends T ? Exclude<T, undefined> : T;
 type TypeFallBackArray<T> = number extends T ? number[] : string extends T ? string[] : T;
 
 export type IDynamoKeyConditionParams<T = any> = {
-  $eq: TypeFallBack<T>;
-  $gt: TypeFallBack<T>;
-  $gte: TypeFallBack<T>;
-  $lt: TypeFallBack<T>;
-  $lte: TypeFallBack<T>;
-  $between: [TypeFallBack<T>, TypeFallBack<T>];
-  $beginsWith: string;
+  $eq?: TypeFallBack<T>;
+  $gt?: TypeFallBack<T>;
+  $gte?: TypeFallBack<T>;
+  $lt?: TypeFallBack<T>;
+  $lte?: TypeFallBack<T>;
+  $between?: [TypeFallBack<T>, TypeFallBack<T>];
+  $beginsWith?: string;
 };
 
 export type IDynamoQueryConditionParams<T = any> = IDynamoKeyConditionParams<T> & {
-  $in: TypeFallBackArray<T>;
-  $contains: string;
-  $notContains: string;
-  $notEq: TypeFallBackArray<T>;
-  $exists: true;
-  $notExists: true;
+  $in?: TypeFallBackArray<T>;
+  $contains?: string;
+  $notContains?: string;
+  $notEq?: TypeFallBackArray<T>;
+  $exists?: true;
+  $notExists?: true;
 };
 
 type QueryPartialAll<T> = {
@@ -53,7 +53,7 @@ export type IQueryDefinition<T> = QueryPartialAll<T> & {
 };
 
 export interface IDynamoQueryParamOptions<T, ISortKeyObjField = any> {
-  query?: IQueryDefinition<RequireAtLeastOne<T>>;
+  query?: IQueryDefinition<RequireAtLeastOne<Partial<T>>>;
   fields?: (keyof T)[];
   partitionKeyQuery: { equals: string | number };
   sortKeyQuery?: QueryKeyConditionBasic<Required<ISortKeyObjField>>;

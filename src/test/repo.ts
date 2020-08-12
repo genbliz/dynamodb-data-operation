@@ -40,6 +40,7 @@ class MyRepositoryBase extends BaseRepository<IPayment> {
       fields: ["amount"],
       query: {
         amount: 9,
+        category: { $gt: "" },
       },
     });
   }
