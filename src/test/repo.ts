@@ -1,5 +1,6 @@
 import { BaseRepository } from "./base-repo";
 import Joi from "@hapi/joi";
+import { IQueryDefinition } from "src/types";
 
 export interface IPayment {
   amount: number;
@@ -7,6 +8,11 @@ export interface IPayment {
   invoiceId: string;
   transactionId?: string;
   remark: string;
+}
+
+const query: IQueryDefinition<IPayment> = { amount: 0, category: "" };
+if (query) {
+  //
 }
 
 const schemaSubDef = {
