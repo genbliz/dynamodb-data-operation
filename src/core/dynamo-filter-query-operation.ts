@@ -32,18 +32,10 @@ function hasQueryConditionKey(key: string) {
 }
 
 const getRandom = () =>
-  [
-    Math.round(Math.random() * 99999),
-    Math.round(Math.random() * 88888),
-    Math.round(Math.random() * 99),
-  ].join("");
+  [Math.round(Math.random() * 99999), Math.round(Math.random() * 88888), Math.round(Math.random() * 99)].join("");
 
 export abstract class DynamoFilterQueryOperation {
-  private operation__filterFieldExist({
-    fieldName,
-  }: {
-    fieldName: string;
-  }): IQueryConditions {
+  private operation__filterFieldExist({ fieldName }: { fieldName: string }): IQueryConditions {
     const attrKeyHash = `#attrKey1${getRandom()}`.toLowerCase();
     const result = {
       xExpressionAttributeNames: {
@@ -54,11 +46,7 @@ export abstract class DynamoFilterQueryOperation {
     return result;
   }
 
-  private operation__filterFieldNotExist({
-    fieldName,
-  }: {
-    fieldName: string;
-  }): IQueryConditions {
+  private operation__filterFieldNotExist({ fieldName }: { fieldName: string }): IQueryConditions {
     const attrKeyHash = `#attrKey2${getRandom()}`.toLowerCase();
     const result = {
       xExpressionAttributeNames: {
@@ -69,7 +57,7 @@ export abstract class DynamoFilterQueryOperation {
     return result;
   }
 
-  protected __helperFilterBasic({
+  protected ddo__helperFilterBasic({
     fieldName,
     val,
     conditionExpr,
@@ -92,13 +80,7 @@ export abstract class DynamoFilterQueryOperation {
     return result;
   }
 
-  private operation__filterIn({
-    fieldName,
-    attrValues,
-  }: {
-    fieldName: string;
-    attrValues: any[];
-  }): IQueryConditions {
+  private operation__filterIn({ fieldName, attrValues }: { fieldName: string; attrValues: any[] }): IQueryConditions {
     const expressAttrVal: { [key: string]: string } = {};
     const expressAttrName: { [key: string]: string } = {};
     const filterExpress: string[] = [];
@@ -113,8 +95,7 @@ export abstract class DynamoFilterQueryOperation {
     });
 
     const _filterExpression = filterExpress.join(" OR ").trim();
-    const _filterExpressionValue =
-      filterExpress.length > 1 ? `(${_filterExpression})` : _filterExpression;
+    const _filterExpressionValue = filterExpress.length > 1 ? `(${_filterExpression})` : _filterExpression;
 
     const result: IQueryConditions = {
       xExpressionAttributeValues: {
@@ -128,13 +109,7 @@ export abstract class DynamoFilterQueryOperation {
     return result;
   }
 
-  private operation__filterContains({
-    fieldName,
-    term,
-  }: {
-    fieldName: string;
-    term: any;
-  }): IQueryConditions {
+  private operation__filterContains({ fieldName, term }: { fieldName: string; term: any }): IQueryConditions {
     const attrKeyHash = `#attrKey5${getRandom()}`.toLowerCase();
     const keyAttr = `:attr${fieldName}${getRandom()}`.toLowerCase();
     const result: IQueryConditions = {
@@ -169,24 +144,12 @@ export abstract class DynamoFilterQueryOperation {
       xExpressionAttributeNames: {
         [_attrKeyHash]: fieldName,
       },
-      xFilterExpression: [
-        _attrKeyHash,
-        "between",
-        _fromKey,
-        "and",
-        _toKey,
-      ].join(" "),
+      xFilterExpression: [_attrKeyHash, "between", _fromKey, "and", _toKey].join(" "),
     };
     return result;
   }
 
-  private operation__filterBeginsWith({
-    fieldName,
-    term,
-  }: {
-    fieldName: string;
-    term: any;
-  }): IQueryConditions {
+  private operation__filterBeginsWith({ fieldName, term }: { fieldName: string; term: any }): IQueryConditions {
     const _attrKeyHash = `#attrKey7${getRandom()}`.toLowerCase();
     const keyAttr = `:attr${fieldName}${getRandom()}`.toLowerCase();
     const result: IQueryConditions = {
@@ -263,7 +226,7 @@ export abstract class DynamoFilterQueryOperation {
         if (hasQueryConditionKey(conditionKey)) {
           const conditionExpr = conditionKeyMap[conditionKey];
           if (conditionExpr) {
-            const _queryConditions = this.__helperFilterBasic({
+            const _queryConditions = this.ddo__helperFilterBasic({
               fieldName: fieldName,
               val: _conditionObjValue,
               conditionExpr: conditionExpr,
@@ -276,14 +239,8 @@ export abstract class DynamoFilterQueryOperation {
     return queryConditions;
   }
 
-  private operation_translateBasicQueryOperation({
-    fieldName,
-    queryObject,
-  }: {
-    fieldName: string;
-    queryObject: any;
-  }) {
-    const _queryConditions = this.__helperFilterBasic({
+  private operation_translateBasicQueryOperation({ fieldName, queryObject }: { fieldName: string; queryObject: any }) {
+    const _queryConditions = this.ddo__helperFilterBasic({
       fieldName: fieldName,
       val: queryObject,
       conditionExpr: "=",
@@ -291,7 +248,7 @@ export abstract class DynamoFilterQueryOperation {
     return _queryConditions;
   }
 
-  protected __helperDynamoFilterOperation({
+  protected ddo__helperDynamoFilterOperation({
     queryDefs,
     projectionFields,
   }: {
@@ -318,20 +275,16 @@ export abstract class DynamoFilterQueryOperation {
               const orQueryObjectOrValue = orQuery[fieldName];
               //
               if (typeof orQueryObjectOrValue === "object") {
-                const _orQueryCond = this.operation__translateAdvancedQueryOperation(
-                  {
-                    fieldName,
-                    queryObject: orQueryObjectOrValue,
-                  }
-                );
+                const _orQueryCond = this.operation__translateAdvancedQueryOperation({
+                  fieldName,
+                  queryObject: orQueryObjectOrValue,
+                });
                 queryOrConditions = [...queryOrConditions, ..._orQueryCond];
               } else {
-                const _orQueryConditions = this.operation_translateBasicQueryOperation(
-                  {
-                    fieldName,
-                    queryObject: orQueryObjectOrValue,
-                  }
-                );
+                const _orQueryConditions = this.operation_translateBasicQueryOperation({
+                  fieldName,
+                  queryObject: orQueryObjectOrValue,
+                });
                 queryOrConditions = [...queryOrConditions, _orQueryConditions];
               }
             });
@@ -411,24 +364,18 @@ export abstract class DynamoFilterQueryOperation {
           _projection_expressionAttributeNames[attrKeyHash] = field;
         }
       });
-      _projectionExpression = Object.keys(
-        _projection_expressionAttributeNames
-      ).join(", ");
+      _projectionExpression = Object.keys(_projection_expressionAttributeNames).join(", ");
       _expressionAttributeNames = {
         ..._projection_expressionAttributeNames,
         ..._expressionAttributeNames,
       };
     }
 
-    const _expressionAttributeValuesFinal = UtilService.objectHasAnyProperty(
-      _expressionAttributeValues
-    )
+    const _expressionAttributeValuesFinal = UtilService.objectHasAnyProperty(_expressionAttributeValues)
       ? _expressionAttributeValues
       : undefined;
     //
-    const _expressionAttributeNamesFinal = UtilService.objectHasAnyProperty(
-      _expressionAttributeNames
-    )
+    const _expressionAttributeNamesFinal = UtilService.objectHasAnyProperty(_expressionAttributeNames)
       ? _expressionAttributeNames
       : undefined;
 

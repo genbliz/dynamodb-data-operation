@@ -32,7 +32,7 @@ export class DynamoManageTable<T> {
     this.secondaryIndexOptions = secondaryIndexOptions;
   }
 
-  private _getLocalVariables() {
+  private _tbl_getLocalVariables() {
     return {
       partitionKeyFieldName: this.partitionKeyFieldName,
       sortKeyFieldName: this.sortKeyFieldName,
@@ -42,26 +42,20 @@ export class DynamoManageTable<T> {
     } as const;
   }
 
-  private _dynamoDb(): DynamoDB {
+  private _tbl_dynamoDb(): DynamoDB {
     return this.dynamoDb();
   }
 
-  async allGetListOfTablesNamesOnlineBase() {
+  async ddo_tbl_getListOfTablesNamesOnline() {
     const params: DynamoDB.ListTablesInput = {
       Limit: 99,
     };
-    const listOfTables = await this._dynamoDb().listTables(params).promise();
+    const listOfTables = await this._tbl_dynamoDb().listTables(params).promise();
     return listOfTables?.TableNames;
   }
 
-  async allTableSettingUpdateTTLBase({
-    attrName,
-    isEnabled,
-  }: {
-    attrName: keyof T;
-    isEnabled: boolean;
-  }) {
-    const { tableFullName } = this._getLocalVariables();
+  async ddo_tbl_tableSettingUpdateTTL({ attrName, isEnabled }: { attrName: keyof T; isEnabled: boolean }) {
+    const { tableFullName } = this._tbl_getLocalVariables();
 
     const params: DynamoDB.Types.UpdateTimeToLiveInput = {
       TableName: tableFullName,
@@ -70,21 +64,21 @@ export class DynamoManageTable<T> {
         Enabled: isEnabled,
       },
     };
-    const result = await this._dynamoDb().updateTimeToLive(params).promise();
+    const result = await this._tbl_dynamoDb().updateTimeToLive(params).promise();
     if (result?.TimeToLiveSpecification) {
       return result.TimeToLiveSpecification;
     }
     return null;
   }
 
-  async allGetTableInfoBase() {
+  async ddo_tbl_getTableInfo() {
     try {
-      const { tableFullName } = this._getLocalVariables();
+      const { tableFullName } = this._tbl_getLocalVariables();
 
       const params: DynamoDB.DescribeTableInput = {
         TableName: tableFullName,
       };
-      const result = await this._dynamoDb().describeTable(params).promise();
+      const result = await this._tbl_dynamoDb().describeTable(params).promise();
       if (result?.Table?.TableName === tableFullName) {
         return result.Table;
       }
@@ -95,8 +89,8 @@ export class DynamoManageTable<T> {
     }
   }
 
-  async allCheckTableExistsBase() {
-    const result = await this.allGetTableInfoBase();
+  async ddo_tbl_checkTableExists() {
+    const result = await this.ddo_tbl_getTableInfo();
     if (!result) {
       return false;
     }
@@ -150,7 +144,7 @@ export class DynamoManageTable<T> {
 
       let canUpdate = false;
 
-      const { tableFullName } = this._getLocalVariables();
+      const { tableFullName } = this._tbl_getLocalVariables();
 
       LoggingService.log({
         secondaryIndexOptions: secondaryIndexOptions.length,
@@ -175,9 +169,7 @@ export class DynamoManageTable<T> {
 
           const indexName = creationParams.xGlobalSecondaryIndex[0].IndexName;
 
-          params.AttributeDefinitions = [
-            ...creationParams.xAttributeDefinitions,
-          ];
+          params.AttributeDefinitions = [...creationParams.xAttributeDefinitions];
 
           creationParams.xGlobalSecondaryIndex.forEach((gsi) => {
             params.GlobalSecondaryIndexUpdates?.push({
@@ -187,17 +179,15 @@ export class DynamoManageTable<T> {
             });
           });
 
-          const result = await this._dynamoDb().updateTable(params).promise();
+          const result = await this._tbl_dynamoDb().updateTable(params).promise();
           if (result?.TableDescription) {
             updateResults.push(result?.TableDescription);
           }
 
           LoggingService.log(
-            [
-              `Creating Index: '${indexName}'`,
-              `on table '${tableFullName}' started:`,
-              new Date().toTimeString(),
-            ].join(" ")
+            [`Creating Index: '${indexName}'`, `on table '${tableFullName}' started:`, new Date().toTimeString()].join(
+              " ",
+            ),
           );
 
           if (indexCount !== newSecondaryIndexOptions.length) {
@@ -227,17 +217,15 @@ export class DynamoManageTable<T> {
             },
           });
 
-          const result = await this._dynamoDb().updateTable(params).promise();
+          const result = await this._tbl_dynamoDb().updateTable(params).promise();
           if (result?.TableDescription) {
             updateResults.push(result?.TableDescription);
           }
 
           LoggingService.log(
-            [
-              `Deleting Index: '${indexName}'`,
-              `on table '${tableFullName}' started:`,
-              new Date().toTimeString(),
-            ].join(" ")
+            [`Deleting Index: '${indexName}'`, `on table '${tableFullName}' started:`, new Date().toTimeString()].join(
+              " ",
+            ),
           );
 
           if (indexCount !== staledIndexNames.length) {
@@ -267,10 +255,10 @@ export class DynamoManageTable<T> {
     }
   }
 
-  async allCreateTableIfNotExistsBase() {
-    const { secondaryIndexOptions } = this._getLocalVariables();
+  async ddo_tbl_createTableIfNotExists() {
+    const { secondaryIndexOptions } = this._tbl_getLocalVariables();
 
-    const existingTableInfo = await this.allGetTableInfoBase();
+    const existingTableInfo = await this.ddo_tbl_getTableInfo();
     if (existingTableInfo) {
       if (secondaryIndexOptions?.length) {
         await this._allUpdateGlobalSecondaryIndexBase({
@@ -285,7 +273,7 @@ export class DynamoManageTable<T> {
       }
       return null;
     }
-    return await this.allCreateTableBase();
+    return await this.ddo_tbl_createTable();
   }
 
   private _getGlobalSecondaryIndexCreationParams({
@@ -293,7 +281,7 @@ export class DynamoManageTable<T> {
   }: {
     secondaryIndexOptions: ISecondaryIndexDef<T>[];
   }) {
-    const { tableFullName } = this._getLocalVariables();
+    const { tableFullName } = this._tbl_getLocalVariables();
     const params: DynamoDB.CreateTableInput = {
       KeySchema: [], //  make linter happy
       AttributeDefinitions: [],
@@ -304,13 +292,7 @@ export class DynamoManageTable<T> {
     const attributeDefinitionsNameList: string[] = [];
 
     secondaryIndexOptions.forEach((sIndex) => {
-      const {
-        indexName,
-        keyFieldName,
-        sortFieldName,
-        dataType,
-        projectionFieldsInclude,
-      } = sIndex;
+      const { indexName, keyFieldName, sortFieldName, dataType, projectionFieldsInclude } = sIndex;
       //
       const _keyFieldName = keyFieldName as string;
       const _sortFieldName = sortFieldName as string;
@@ -352,8 +334,7 @@ export class DynamoManageTable<T> {
         IndexName: indexName,
         Projection: {
           ProjectionType: projectionType,
-          NonKeyAttributes:
-            projectionType === "INCLUDE" ? projectionFields : undefined,
+          NonKeyAttributes: projectionType === "INCLUDE" ? projectionFields : undefined,
         },
         KeySchema: [
           {
@@ -373,13 +354,13 @@ export class DynamoManageTable<T> {
     };
   }
 
-  async allCreateTableBase() {
+  async ddo_tbl_createTable() {
     const {
       partitionKeyFieldName,
       sortKeyFieldName,
       tableFullName,
       secondaryIndexOptions,
-    } = this._getLocalVariables();
+    } = this._tbl_getLocalVariables();
 
     const params: DynamoDB.CreateTableInput = {
       AttributeDefinitions: [
@@ -422,9 +403,7 @@ export class DynamoManageTable<T> {
         secondaryIndexOptions,
       });
       if (creationParams.xAttributeDefinitions?.length) {
-        const existAttrDefNames = params.AttributeDefinitions.map(
-          (def) => def.AttributeName
-        );
+        const existAttrDefNames = params.AttributeDefinitions.map((def) => def.AttributeName);
         creationParams.xAttributeDefinitions.forEach((def) => {
           const alreadyDefined = existAttrDefNames.includes(def.AttributeName);
           if (!alreadyDefined) {
@@ -439,7 +418,7 @@ export class DynamoManageTable<T> {
       "@allCreateTableBase, table: ": tableFullName,
     });
 
-    const result = await this._dynamoDb().createTable(params).promise();
+    const result = await this._tbl_dynamoDb().createTable(params).promise();
 
     if (result?.TableDescription) {
       LoggingService.log(
@@ -447,15 +426,15 @@ export class DynamoManageTable<T> {
           `@allCreateTableBase,`,
           `Created table: '${result?.TableDescription.TableName}'`,
           new Date().toTimeString(),
-        ].join(" ")
+        ].join(" "),
       );
       return result.TableDescription;
     }
     return null;
   }
 
-  async allDeleteGlobalSecondaryIndexBase(indexName: string) {
-    const { tableFullName } = this._getLocalVariables();
+  async ddo_tbl_deleteGlobalSecondaryIndex(indexName: string) {
+    const { tableFullName } = this._tbl_getLocalVariables();
 
     const params: DynamoDB.UpdateTableInput = {
       TableName: tableFullName,
@@ -467,7 +446,7 @@ export class DynamoManageTable<T> {
         },
       ],
     };
-    const result = await this._dynamoDb().updateTable(params).promise();
+    const result = await this._tbl_dynamoDb().updateTable(params).promise();
     if (result?.TableDescription) {
       return result.TableDescription;
     }

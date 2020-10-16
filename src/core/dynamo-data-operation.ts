@@ -70,7 +70,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     this.here_strictRequiredFields = strictRequiredFields as string[];
   }
 
-  protected getTableManager() {
+  protected ddo_tableManager() {
     if (!this.here_tableManager) {
       this.here_tableManager = new DynamoManageTable<T>({
         dynamoDb: this.here_dynamoDb,
@@ -91,7 +91,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     return this.here_dynamoDb();
   }
 
-  private generateDynamoTableKey() {
+  private _generateDynamoTableKey() {
     return this.here_dataKeyGenerator();
   }
 
@@ -138,7 +138,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     }
   }
 
-  protected async allCreateOneBase({ data }: { data: T }) {
+  protected async ddo_createOne({ data }: { data: T }) {
     this._checkValidateStrictRequiredFields(data);
 
     const { tableFullName, partitionKeyFieldName } = this._getLocalVariables();
@@ -146,7 +146,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     let dataId: string | undefined = data[partitionKeyFieldName];
 
     if (!dataId) {
-      dataId = this.generateDynamoTableKey();
+      dataId = this._generateDynamoTableKey();
     }
 
     const dataMust = this._getBaseObject({ dataId });
@@ -164,7 +164,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     return result;
   }
 
-  private withConditionPassed({ item, withCondition }: { item: any; withCondition?: IFieldCondition<T> }) {
+  private _withConditionPassed({ item, withCondition }: { item: any; withCondition?: IFieldCondition<T> }) {
     if (item && withCondition?.length) {
       const isPassed = withCondition.every(({ field, equals }) => {
         return item[field] !== undefined && item[field] === equals;
@@ -174,7 +174,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     return true;
   }
 
-  protected async allGetOneByIdBase({
+  protected async ddo_getOneById({
     dataId,
     withCondition,
   }: {
@@ -200,14 +200,14 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     if (!item) {
       return null;
     }
-    const isPassed = this.withConditionPassed({ withCondition, item });
+    const isPassed = this._withConditionPassed({ withCondition, item });
     if (!isPassed) {
       return null;
     }
     return item;
   }
 
-  protected async allUpdateOneDirectBase({ data }: { data: T }) {
+  protected async ddo_updateOneDirect({ data }: { data: T }) {
     this._checkValidateStrictRequiredFields(data);
 
     const { tableFullName, partitionKeyFieldName } = this._getLocalVariables();
@@ -234,7 +234,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     return result;
   }
 
-  protected async allUpdateOneByIdBase({
+  protected async ddo_updateOneById({
     dataId,
     data,
     withCondition,
@@ -249,13 +249,13 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
 
     this.allHelpValidateRequiredString({ Update1DataId: dataId });
 
-    const dataInDb = await this.allGetOneByIdBase({ dataId });
+    const dataInDb = await this.ddo_getOneById({ dataId });
 
     if (!(dataInDb && dataInDb[partitionKeyFieldName])) {
       throw this.allHelpCreateFriendlyError("Data does NOT exists");
     }
 
-    const isPassed = this.withConditionPassed({
+    const isPassed = this._withConditionPassed({
       withCondition,
       item: dataInDb,
     });
@@ -298,16 +298,16 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     });
   }
 
-  protected async allQueryGetManyByConditionBase(paramOptions: IDynamoQueryParamOptions<T>) {
+  protected async ddo_getManyByCondition(paramOptions: IDynamoQueryParamOptions<T>) {
     paramOptions.pagingParams = undefined;
-    const result = await this.allQueryGetManyByConditionPaginateBase(paramOptions);
+    const result = await this.ddo_getManyByConditionPaginate(paramOptions);
     if (result?.mainResult?.length) {
       return result.mainResult;
     }
     return [];
   }
 
-  protected async allQueryGetManyByConditionPaginateBase(paramOptions: IDynamoQueryParamOptions<T>) {
+  protected async ddo_getManyByConditionPaginate(paramOptions: IDynamoQueryParamOptions<T>) {
     const { tableFullName, sortKeyFieldName, partitionKeyFieldName } = this._getLocalVariables();
     //
     if (!paramOptions?.partitionKeyQuery?.equals === undefined) {
@@ -330,7 +330,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       }
     }
 
-    const filterHashSortKey = this.__helperDynamoFilterOperation({
+    const filterHashSortKey = this.ddo__helperDynamoFilterOperation({
       queryDefs: {
         ...sortKeyQuery,
         ...{
@@ -345,7 +345,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     let otherExpressionAttributeValues: any = undefined;
     let otherExpressionAttributeNames: any = undefined;
     if (paramOptions?.query) {
-      const filterOtherAttr = this.__helperDynamoFilterOperation({
+      const filterOtherAttr = this.ddo__helperDynamoFilterOperation({
         queryDefs: paramOptions.query,
         projectionFields: null,
       });
@@ -383,7 +383,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     const hashKeyAndSortKey: [string, string] = [partitionKeyFieldName, sortKeyFieldName];
 
     const paginationObjects = { ...paramOptions.pagingParams };
-    const result = await this.__helperDynamoQueryProcessor<T>({
+    const result = await this.ddo__helperDynamoQueryProcessor<T>({
       dynamoDbClient: () => this._dynamoDbClient(),
       params,
       hashKeyAndSortKey,
@@ -392,7 +392,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     return result;
   }
 
-  protected async allBatchGetManyByIdsBase({
+  protected async ddo_batchGetManyByIds({
     dataIds,
     fields,
     withCondition,
@@ -543,18 +543,18 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     });
   }
 
-  protected async allQuerySecondaryIndexBase<TData = T, TSortKeyField = string>(
+  protected async ddo_getSecondaryIndex<TData = T, TSortKeyField = string>(
     paramOption: IDynamoQuerySecondayIndexOptions<TData, TSortKeyField>,
   ) {
     paramOption.pagingParams = undefined;
-    const result = await this.allQuerySecondaryIndexPaginateBase<TData, TSortKeyField>(paramOption);
+    const result = await this.ddo_getSecondaryIndexPaginate<TData, TSortKeyField>(paramOption);
     if (result?.mainResult) {
       return result.mainResult;
     }
     return [];
   }
 
-  protected async allQuerySecondaryIndexPaginateBase<TData = T, TSortKeyField = string>(
+  protected async ddo_getSecondaryIndexPaginate<TData = T, TSortKeyField = string>(
     paramOption: IDynamoQuerySecondayIndexOptions<TData, TSortKeyField>,
   ) {
     const { tableFullName, secondaryIndexOptions } = this._getLocalVariables();
@@ -588,7 +588,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       filterExpression,
       projectionExpressionAttr,
       expressionAttributeNames,
-    } = this.__helperDynamoFilterOperation({
+    } = this.ddo__helperDynamoFilterOperation({
       queryDefs: partitionSortKeyQuery,
       projectionFields: fields ?? undefined,
     });
@@ -597,7 +597,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     let otherExpressionAttributeValues: any = undefined;
     let otherExpressionAttributeNames: any = undefined;
     if (query) {
-      const otherAttr = this.__helperDynamoFilterOperation({
+      const otherAttr = this.ddo__helperDynamoFilterOperation({
         queryDefs: query,
         projectionFields: null,
       });
@@ -637,7 +637,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
 
     const hashKeyAndSortKey: [string, string] = [partitionKeyFieldName, sortKeyFieldName];
 
-    const result = await this.__helperDynamoQueryProcessor<T>({
+    const result = await this.ddo__helperDynamoQueryProcessor<T>({
       dynamoDbClient: () => this._dynamoDbClient(),
       params,
       orderDesc,
@@ -647,7 +647,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     return result;
   }
 
-  protected async allDeleteByIdBase({
+  protected async ddo_deleteById({
     dataId,
     withCondition,
   }: {
@@ -658,7 +658,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     this.allHelpValidateRequiredString({ Del1SortKey: dataId });
     const { tableFullName, partitionKeyFieldName, sortKeyFieldName, featureEntityValue } = this._getLocalVariables();
 
-    const dataExist = await this.allGetOneByIdBase({ dataId, withCondition });
+    const dataExist = await this.ddo_getOneById({ dataId, withCondition });
 
     if (!(dataExist && dataExist[partitionKeyFieldName])) {
       throw this.allHelpCreateFriendlyError("Record does NOT exists");
@@ -676,7 +676,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     return dataExist;
   }
 
-  protected async allDeleteManyDangerouselyByIds({ dataIds }: { dataIds: string[] }): Promise<boolean> {
+  protected async ddo_deleteManyDangerouselyByIds({ dataIds }: { dataIds: string[] }): Promise<boolean> {
     //
     dataIds.forEach((sortKeyValue) => {
       this.allHelpValidateRequiredString({

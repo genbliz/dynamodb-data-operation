@@ -5,7 +5,7 @@ import { LoggingService } from "../helpers/logging-service";
 
 export abstract class DynamoQueryScanProcessor {
   //
-  protected async __helperDynamoQueryProcessor<T>({
+  protected async ddo__helperDynamoQueryProcessor<T>({
     evaluationLimit,
     params,
     pageSize,
@@ -112,10 +112,7 @@ export abstract class DynamoQueryScanProcessor {
 
           if (returnedItems.length && hashKeyAndSortKey?.length) {
             const dataObj = returnedItems.slice(-1)[0];
-            const customLastEvaluationKey = this.__createCustomLastEvaluationKey(
-              dataObj,
-              hashKeyAndSortKey
-            );
+            const customLastEvaluationKey = this.__createCustomLastEvaluationKey(dataObj, hashKeyAndSortKey);
             LoggingService.log({ customLastEvaluationKey });
           }
 
@@ -124,10 +121,7 @@ export abstract class DynamoQueryScanProcessor {
               mainResult: returnedItems,
             };
 
-            if (
-              data.LastEvaluatedKey &&
-              Object.keys(data.LastEvaluatedKey).length
-            ) {
+            if (data.LastEvaluatedKey && Object.keys(data.LastEvaluatedKey).length) {
               const lastKeyHash = this.__encodeLastKey(data.LastEvaluatedKey);
               scanResult.lastKeyHash = lastKeyHash;
             }
@@ -177,10 +171,7 @@ export abstract class DynamoQueryScanProcessor {
     return Buffer.from(JSON.stringify(lastEvaluatedKey)).toString("base64");
   }
 
-  private __createCustomLastEvaluationKey(
-    dataObj: Record<string, any>,
-    primaryFieldNames: string[]
-  ) {
+  private __createCustomLastEvaluationKey(dataObj: Record<string, any>, primaryFieldNames: string[]) {
     const obj: any = {};
     primaryFieldNames.forEach((key) => {
       if (typeof dataObj[key] !== "undefined") {

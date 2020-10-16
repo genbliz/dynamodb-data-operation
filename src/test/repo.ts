@@ -51,7 +51,7 @@ class MyRepositoryBase extends BaseRepository<IPayment> {
   }
 
   getIt() {
-    return this.allQueryGetManyByConditionBase({
+    return this.ddo_getManyByCondition({
       partitionKeyQuery: {
         equals: 0,
       },
@@ -64,7 +64,7 @@ class MyRepositoryBase extends BaseRepository<IPayment> {
   }
 
   async create() {
-    await this.allUpdateOneByIdBase({
+    await this.ddo_updateOneById({
       dataId: "",
       data: {
         amount: getRandom(),
