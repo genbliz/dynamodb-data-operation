@@ -407,6 +407,38 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       });
     });
 
+    const originalIds = [...dataIds];
+    const BATCH_SIZE = 70;
+
+    const batchIds: string[][] = [];
+
+    while (originalIds?.length > 0) {
+      batchIds.push(originalIds.splice(0, BATCH_SIZE));
+    }
+
+    LoggingService.log("@allBatchGetManyByIdsBase batchIds: ", batchIds.length);
+
+    const postCalls = batchIds.map((batch) => {
+      const call = this.__allBatchGetManyByIdsBasePrivate({
+        dataIds: batch,
+        fields,
+        withCondition,
+      });
+      return call;
+    });
+    const result = await Promise.all(postCalls);
+    return result.flatMap((x) => x);
+  }
+
+  private async __allBatchGetManyByIdsBasePrivate({
+    dataIds,
+    fields,
+    withCondition,
+  }: {
+    dataIds: string[];
+    fields?: (keyof T)[];
+    withCondition?: IFieldCondition<T>;
+  }) {
     return new Promise<T[]>((resolve, reject) => {
       const getRandom = () =>
         [
@@ -496,7 +528,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
             returnedItems = [...returnedItems, ...itemList];
           }
 
-          if (data?.UnprocessedKeys && Object.keys(data?.UnprocessedKeys).length) {
+          if (data?.UnprocessedKeys && Object.keys(data.UnprocessedKeys).length) {
             const _params: DynamoDB.BatchGetItemInput = {
               RequestItems: data.UnprocessedKeys,
             };
