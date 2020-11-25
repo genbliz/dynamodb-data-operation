@@ -407,8 +407,8 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       });
     });
 
-    const originalIds = [...dataIds];
-    const BATCH_SIZE = 70;
+    const originalIds = Array.from(new Set([...dataIds]));
+    const BATCH_SIZE = 80;
 
     const batchIds: string[][] = [];
 
