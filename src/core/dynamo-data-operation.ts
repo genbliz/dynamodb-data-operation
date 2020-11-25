@@ -412,22 +412,25 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
 
     const batchIds: string[][] = [];
 
-    while (originalIds?.length > 0) {
-      batchIds.push(originalIds.splice(0, BATCH_SIZE));
+    while (originalIds.length > 0) {
+      const ids = originalIds.splice(0, BATCH_SIZE);
+      batchIds.push(ids);
     }
 
     LoggingService.log("@allBatchGetManyByIdsBase batchIds: ", batchIds.length);
 
-    const postCalls = batchIds.map((batch) => {
-      const call = this.__allBatchGetManyByIdsBasePrivate({
+    let result: T[] = [];
+
+    for (const batch of batchIds) {
+      const call = await this.__allBatchGetManyByIdsBasePrivate({
         dataIds: batch,
         fields,
         withCondition,
       });
-      return call;
-    });
-    const result = await Promise.all(postCalls);
-    return result.flatMap((x) => x);
+      result = [...result, ...call];
+    }
+    LoggingService.log("@allBatchGetManyByIdsBase batchIds result Out", result.length);
+    return result;
   }
 
   private async __allBatchGetManyByIdsBasePrivate({
