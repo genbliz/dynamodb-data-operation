@@ -1,7 +1,7 @@
 import { ISecondaryIndexDef } from "../types";
 import DynamoDataOpr from "../core/dynamo-data-operation";
 import { MyDynamoConnection } from "../test/connection";
-import Joi from "@hapi/joi";
+import Joi from "joi";
 
 interface IBaseRepoOptions<T> {
   schemaSubDef: Joi.SchemaMap;

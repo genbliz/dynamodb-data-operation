@@ -1,5 +1,5 @@
 import { BaseRepository } from "./base-repo";
-import Joi from "@hapi/joi";
+import Joi from "joi";
 import { IQueryDefinition } from "src/types";
 
 export interface IPayment {

@@ -7,7 +7,7 @@ import type {
 import { GenericDataError } from "./../helpers/errors";
 import type { DynamoDB } from "aws-sdk";
 import type { DocumentClient } from "aws-sdk/clients/dynamodb";
-import Joi from "@hapi/joi";
+import Joi from "joi";
 import { Marshaller } from "@aws/dynamodb-auto-marshaller";
 import { getJoiValidationErrors } from "../core/base-joi-helper";
 import BaseMixins from "../core/base-mixins";
