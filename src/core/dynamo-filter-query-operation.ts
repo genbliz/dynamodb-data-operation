@@ -264,10 +264,10 @@ export abstract class DynamoFilterQueryOperation {
     let _expressionAttributeValues: IDictionaryAttr = {};
     let _expressionAttributeNames: IDictionaryAttr = {};
 
-    Object.keys(queryDefs).forEach((fieldName_or_$or) => {
-      if (fieldName_or_$or === "$or") {
-        const $orKey = fieldName_or_$or;
-        const orArray: any = queryDefs[$orKey];
+    Object.keys(queryDefs).forEach((fieldName_Or_And) => {
+      if (fieldName_Or_And === "$or") {
+        const orKey = fieldName_Or_And;
+        const orArray: any[] = queryDefs[orKey];
         if (Array.isArray(orArray)) {
           orArray.forEach((orQuery) => {
             Object.keys(orQuery).forEach((fieldName) => {
@@ -290,8 +290,33 @@ export abstract class DynamoFilterQueryOperation {
             });
           });
         }
+      } else if (fieldName_Or_And === "$and") {
+        const andKey = fieldName_Or_And;
+        const andArray: any[] = queryDefs[andKey];
+        if (Array.isArray(andArray)) {
+          andArray.forEach((andQuery) => {
+            Object.keys(andQuery).forEach((fieldName) => {
+              //
+              const andQueryObjectOrValue = andQuery[fieldName];
+              //
+              if (typeof andQueryObjectOrValue === "object") {
+                const _andQueryCond = this.operation__translateAdvancedQueryOperation({
+                  fieldName,
+                  queryObject: andQueryObjectOrValue,
+                });
+                queryAndConditions = [...queryAndConditions, ..._andQueryCond];
+              } else {
+                const _andQueryConditions = this.operation_translateBasicQueryOperation({
+                  fieldName,
+                  queryObject: andQueryObjectOrValue,
+                });
+                queryAndConditions = [...queryAndConditions, _andQueryConditions];
+              }
+            });
+          });
+        }
       } else {
-        const fieldName2 = fieldName_or_$or;
+        const fieldName2 = fieldName_Or_And;
         const queryObjectOrValue = queryDefs[fieldName2];
         if (typeof queryObjectOrValue === "object") {
           const _queryCond = this.operation__translateAdvancedQueryOperation({

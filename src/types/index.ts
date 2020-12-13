@@ -53,8 +53,9 @@ export type IDynamoPagingParams = {
 // };
 
 type IQueryDefOr<T> = { $or?: QueryPartialAll<RequireAtLeastOne<T>>[] };
+type IQueryDefAnd<T> = { $and?: QueryPartialAll<RequireAtLeastOne<T>>[] };
 
-export type IQueryDefinition<T> = QueryPartialAll<RequireAtLeastOne<T & IQueryDefOr<T>>>;
+export type IQueryDefinition<T> = QueryPartialAll<RequireAtLeastOne<T & IQueryDefOr<T> & IQueryDefAnd<T>>>;
 
 export interface IDynamoQueryParamOptions<T, ISortKeyObjField = any> {
   query?: IQueryDefinition<T>;
