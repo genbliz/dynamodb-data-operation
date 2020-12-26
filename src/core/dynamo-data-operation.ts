@@ -181,7 +181,13 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     dataId: string;
     withCondition?: IFieldCondition<T>;
   }): Promise<T | null> {
-    const { partitionKeyFieldName, sortKeyFieldName, featureEntityValue, tableFullName } = this._getLocalVariables();
+    const {
+      //
+      partitionKeyFieldName,
+      sortKeyFieldName,
+      featureEntityValue,
+      tableFullName,
+    } = this._getLocalVariables();
 
     this.allHelpValidateRequiredString({
       QueryGetOnePartitionKey: dataId,
@@ -298,6 +304,10 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
     });
   }
 
+  private _removeDuplicateString<T = string>(strArray: T[]) {
+    return Array.from(new Set([...strArray]));
+  }
+
   protected async ddo_getManyByCondition(paramOptions: IDynamoQueryParamOptions<T>) {
     paramOptions.pagingParams = undefined;
     const result = await this.ddo_getManyByConditionPaginate(paramOptions);
@@ -330,6 +340,8 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       }
     }
 
+    const fieldKeys = paramOptions?.fields?.length ? this._removeDuplicateString(paramOptions.fields) : undefined;
+
     const filterHashSortKey = this.ddo__helperDynamoFilterOperation({
       queryDefs: {
         ...sortKeyQuery,
@@ -337,7 +349,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
           [partitionKeyFieldName]: paramOptions.partitionKeyQuery.equals,
         },
       },
-      projectionFields: paramOptions?.fields ?? undefined,
+      projectionFields: fieldKeys,
     });
     //
     //
@@ -407,7 +419,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       });
     });
 
-    const originalIds = Array.from(new Set([...dataIds]));
+    const originalIds = this._removeDuplicateString(dataIds);
     const BATCH_SIZE = 80;
 
     const batchIds: string[][] = [];
@@ -421,10 +433,12 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
 
     let result: T[] = [];
 
+    const fieldKeys = fields?.length ? this._removeDuplicateString(fields) : fields;
+
     for (const batch of batchIds) {
       const call = await this.__allBatchGetManyByIdsBasePrivate({
         dataIds: batch,
-        fields,
+        fields: fieldKeys,
         withCondition,
       });
       result = [...result, ...call];
@@ -451,9 +465,17 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
           Math.round(Math.random() * 99),
         ].join("");
 
-      const { tableFullName, partitionKeyFieldName, sortKeyFieldName, featureEntityValue } = this._getLocalVariables();
+      const {
+        //
+        tableFullName,
+        partitionKeyFieldName,
+        sortKeyFieldName,
+        featureEntityValue,
+      } = this._getLocalVariables();
 
-      const getArray: DynamoDB.Key[] = dataIds.map((dataId) => {
+      const dataIdsNoDup = this._removeDuplicateString(dataIds);
+
+      const getArray: DynamoDB.Key[] = dataIdsNoDup.map((dataId) => {
         const params01 = {
           [partitionKeyFieldName]: { S: dataId },
           [sortKeyFieldName]: { S: featureEntityValue },
@@ -465,17 +487,17 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       let expressionAttributeNames: DynamoDB.ExpressionAttributeNameMap | undefined = undefined;
 
       if (fields?.length) {
-        const _fields: any[] = [...fields];
-        if (fields?.length && withCondition?.length) {
+        const fieldKeys = this._removeDuplicateString(fields);
+        if (withCondition?.length) {
           /** Add excluded condition */
           withCondition.forEach((condition) => {
-            if (!fields.includes(condition.field)) {
-              _fields.push(condition.field);
+            if (!fieldKeys.includes(condition.field)) {
+              fieldKeys.push(condition.field);
             }
           });
         }
         expressionAttributeNames = {};
-        _fields.forEach((fieldName) => {
+        fieldKeys.forEach((fieldName) => {
           if (typeof fieldName === "string") {
             if (expressionAttributeNames) {
               const attrKeyHash = `#attrKey${getRandom()}k`.toLowerCase();
@@ -566,7 +588,15 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       throw new GenericDataError("Invalid secondary index definitions");
     }
 
-    const { indexName, partitionKeyQuery, sortKeyQuery, fields, pagingParams, query } = paramOption;
+    const {
+      //
+      indexName,
+      partitionKeyQuery,
+      sortKeyQuery,
+      fields,
+      pagingParams,
+      query,
+    } = paramOption;
 
     const secondaryIndex = secondaryIndexOptions.find((item) => {
       return item.indexName === indexName;
@@ -586,6 +616,8 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
         }
       : { [partitionKeyFieldName]: partitionKeyQuery.equals };
 
+    const fieldKeys = fields?.length ? this._removeDuplicateString(fields) : undefined;
+
     const {
       expressionAttributeValues,
       filterExpression,
@@ -593,7 +625,7 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
       expressionAttributeNames,
     } = this.ddo__helperDynamoFilterOperation({
       queryDefs: partitionSortKeyQuery,
-      projectionFields: fields ?? undefined,
+      projectionFields: fieldKeys,
     });
 
     let otherFilterExpression: string | undefined = undefined;
@@ -681,15 +713,22 @@ export default abstract class DynamoDataOperation<T> extends BaseMixins {
 
   protected async ddo_deleteManyDangerouselyByIds({ dataIds }: { dataIds: string[] }): Promise<boolean> {
     //
-    dataIds.forEach((sortKeyValue) => {
+    const dataIdsNoDuplicates = this._removeDuplicateString(dataIds);
+    dataIdsNoDuplicates.forEach((sortKeyValue) => {
       this.allHelpValidateRequiredString({
         DelSortKey: sortKeyValue,
       });
     });
 
-    const { tableFullName, partitionKeyFieldName, sortKeyFieldName, featureEntityValue } = this._getLocalVariables();
+    const {
+      //
+      tableFullName,
+      partitionKeyFieldName,
+      sortKeyFieldName,
+      featureEntityValue,
+    } = this._getLocalVariables();
 
-    const delArray = dataIds.map((dataId) => {
+    const delArray = dataIdsNoDuplicates.map((dataId) => {
       const params01: DynamoDB.WriteRequest = {
         DeleteRequest: {
           Key: {
